@@ -4,4 +4,6 @@
 
 * FASTQ files can be found in the following directory: `/labs/mfilbin/homes/biagi/PanCancer/Ependymoma`
 
-* 
+* **Code to reproduce manuscript analyses**
+
+Fig. 1: oncoplot summarizing the clinical information of the samples profiled by single-cell analysis
