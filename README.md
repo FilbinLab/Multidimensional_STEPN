@@ -14,7 +14,7 @@ test
 ## Coculture processing
 Experiment to determine the cell state shifts between EP1NS cells cultures alone (monoculture) or with rat neurons and astrocytes (coculture).
 In total, 3x4 plates coculture and 1x4 plates monoculture were sequenced. 1x run of coculture was bad QC, and therefore removed.
-The remaining goodQC runs are stored under the following folders
+The remaining goodQC runs are stored under the following folders:
 
 231207 - CoCulture, 4 plates `/labs/mfilbin/Demultiplexing/231207`
 
@@ -23,18 +23,10 @@ The remaining goodQC runs are stored under the following folders
 231103 - MonoCulture, 4 plates `/labs/mfilbin/homes/biagi/Demultiplexing/231103`
 
 
-1. Demultiplexing. Standard protocol for fresh samples.
+1. Demultiplexing. Samples demultiplexed using standard code under Demultiplexing.
 
-2. Generate the count matrices, TPM and QC files for each sample. 
-First, copy files into O2 using the following lines 
-```rsync -avzP /labs/mfilbin/Demultiplexing/231207 sad167@transfer.rc.hms.harvard.edu:/n/scratch/users/s/sad167/EPN```
+2. QC. Script '0_qc.R' was used to remove low quality cells
 
-`rsync -avzP /labs/mfilbin/homes/biagi/Demultiplexing/231116 sad167@transfer.rc.hms.harvard.edu:/n/scratch/users/s/sad167/EPN/`
+3. Processing. Script '2_Processing_coculture_only.R' used to create a Seurat object, score cells for metaprograms identified in frozen ZFTA-RELA patient cohort.
 
-`rsync -avzP /labs/mfilbin/homes/biagi/Demultiplexing/231103 sad167@transfer.rc.hms.harvard.edu:/n/scratch/users/s/sad167/EPN/`
-
-- Then, use the scripts inside the preprocessing folder.
-
-`while IFS=, read -r samplename type path; do
-    sbatch -J ${samplename} -o /n/scratch/users/s/sad167/EPN/logs/hisat2_rsem/${samplename}.out -e /n/scratch/users/s/sad167/EPN/logs/hisat2_rsem/${samplename}.err /n/scratch/users/s/sad167/EPN/scripts/preprocessing/main.sbatch ${path} ${type}
-done </n/scratch/users/s/sad167/EPN/infos.csv`
+4. Plots. Script '3_plots_Mono_co_culture_only.R' used to generate plots for final figures
