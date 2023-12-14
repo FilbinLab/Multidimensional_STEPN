@@ -16,7 +16,11 @@ Experiment to determine the cell state shifts between EP1NS cells cultures alone
 In total, 3x4 plates coculture and 1x4 plates monoculture were sequenced. 1x run of coculture was bad QC, and therefore removed.
 The remaining goodQC runs are stored under the following folders
 
-231207 - CoCulture, 4 plates `/labs/mfilbin/Demultiplexing/231207` 231116 - CoCulture, 4 plates `/labs/mfilbin/homes/biagi/Demultiplexing/231116` 231103 - MonoCulture, 4 plates `/labs/mfilbin/homes/biagi/Demultiplexing/231103`
+231207 - CoCulture, 4 plates `/labs/mfilbin/Demultiplexing/231207`
+
+231116 - CoCulture, 4 plates `/labs/mfilbin/homes/biagi/Demultiplexing/231116` 
+
+231103 - MonoCulture, 4 plates `/labs/mfilbin/homes/biagi/Demultiplexing/231103`
 
 
 1. Demultiplexing. Standard protocol for fresh samples.
@@ -26,8 +30,7 @@ First, copy files into O2 using the following lines
 `rsync -avzP /labs/mfilbin/Demultiplexing/231207 sad167@transfer.rc.hms.harvard.edu:/n/scratch/users/s/sad167/EPN`
 `rsync -avzP /labs/mfilbin/homes/biagi/Demultiplexing/231116 sad167@transfer.rc.hms.harvard.edu:/n/scratch/users/s/sad167/EPN/`
 `rsync -avzP /labs/mfilbin/homes/biagi/Demultiplexing/231103 sad167@transfer.rc.hms.harvard.edu:/n/scratch/users/s/sad167/EPN/`
-
-The, use the scripts inside the preprocessing folder.
+- Then, use the scripts inside the preprocessing folder.
 
 `while IFS=, read -r samplename type path; do
     sbatch -J ${samplename} -o /n/scratch/users/s/sad167/EPN/logs/hisat2_rsem/${samplename}.out -e /n/scratch/users/s/sad167/EPN/logs/hisat2_rsem/${samplename}.err /n/scratch/users/s/sad167/EPN/scripts/preprocessing/main.sbatch ${path} ${type}
