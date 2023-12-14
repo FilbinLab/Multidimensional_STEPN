@@ -30,5 +30,5 @@ First, copy files into O2 using the following lines
 The, use the scripts inside the preprocessing folder.
 
 `while IFS=, read -r samplename type path; do
-    sbatch -J ${samplename} -o /n/scratch/users/s/sad167/EPN/logs/hisat2_rsem/${samplename}.out -e /n/scratch/users/s/sad167/EPN/logs/hisat2_rsem/${samplename}.err /n/scratch/users/s/sad167/EPN/main.sbatch ${path} ${type}
-done </n/scratch3/users/c/cao385/PanCancer/data/ATRT/infos.csv`
+    sbatch -J ${samplename} -o /n/scratch/users/s/sad167/EPN/logs/hisat2_rsem/${samplename}.out -e /n/scratch/users/s/sad167/EPN/logs/hisat2_rsem/${samplename}.err /n/scratch/users/s/sad167/EPN/scripts/preprocessing/main.sbatch ${path} ${type}
+done </n/scratch/users/s/sad167/EPN/infos.csv`
