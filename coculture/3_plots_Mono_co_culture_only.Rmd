@@ -1,0 +1,231 @@
+---
+title: "scRNAseq results of mono- vs. co-culture of EP1NS cells"
+author: "Sara Danielli"
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+---
+
+```{r, setup, include = FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = TRUE, cache = TRUE, warning = FALSE, comment = FALSE)
+```
+
+```{r preparation environment, message=FALSE, warning=FALSE}
+# Load packages -----------------------------------
+library(dplyr)
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(SeuratObject)
+library(data.table)
+library(tidyverse)
+library(future)
+library(clustree)
+library(clusterProfiler)
+library(ggpubr)
+library(cowplot)
+library(ggrastr)
+
+# Organize environment  -----------------------------------
+base_dir <- "/Users/sdaniell/Dropbox (Partners HealthCare)/Sara Danielli/Project/Ependymoma/9 - scRNAseq coculture"
+analysis_dir <- file.path(base_dir, 'analysis')
+resource_dir <- file.path(base_dir, 'scripts/resources')
+
+plot_dir <- file.path(analysis_dir, 'plots/mono_vs_coculture')
+if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
+data_dir <- file.path(analysis_dir, 'data')
+if (!dir.exists(data_dir)){dir.create(data_dir, recursive = T)}
+
+source(file.path(resource_dir, 'Plot_style_v2.R'))
+source(file.path(resource_dir, 'single_cell_preprocessing_helper_functions.R'))
+
+
+# Define color palettes  -----------------------------------
+col_model <- c( 'grey', 'red')
+col_cluster_label_transfer <- c("#F99E93FF","#96410EFF")
+
+
+# load Seurat object -----------------------------------
+EP1NS_combined <- readRDS(file.path(data_dir, "Mono_co_culture_merged.rds"))
+# reorder model order
+EP1NS_combined$sample <- factor(x = EP1NS_combined$sample, 
+                                  levels = c("Monoculture", "Coculture"))
+# reorder label-transfer cluster order
+EP1NS_combined$SingleR.labels <- factor(x = EP1NS_combined$SingleR.labels, levels = c("ZFTA_Neuroepithelial_like", "ZFTA_MES_like")) 
+```
+
+# UMAP plots
+
+Plot UMAP colored by different metadata columns
+
+## By cluster
+```{r UMAP clusters, fig.width = 5, fig.height = 4, fig.align="center"}
+## by clusters
+Idents(EP1NS_combined) = 'seurat_clusters'
+DimPlot(EP1NS_combined, reduction = "umap", pt.size = 2)
+ggsave(file.path(plot_dir, "1_UMAP_clusters.pdf"), width=6, height=5)
+```
+## By sample
+```{r UMAP sample, fig.width = 5, fig.height = 4, fig.align="center"}
+## by sample
+DimPlot(EP1NS_combined, reduction = "umap", group.by = 'sample', pt.size = 2, cols = col_model)
+ggsave(file.path(plot_dir, "2_UMAP_model.pdf"), width=6, height=5)
+
+```  
+
+## By label transfer
+```{r UMAP singleR, fig.width = 6, fig.height = 4, fig.align="center"}
+## by SingleR
+DimPlot(EP1NS_combined, reduction = "umap", group.by = 'SingleR.labels', pt.size = 2, cols = col_cluster_label_transfer)
+ggsave(file.path(plot_dir, "3_UMAP_label_transfer.pdf"), width=8, height=5)
+```  
+
+## By scores
+```{r UMAP scores, fig.width = 9, fig.height = 5, fig.align="center"}
+## by patient scores
+scores <- c('NPC_like', 'Mesenchymal', 'Radial_glia', 'Ependymal', 'Neuroepithelial', 'Cycling')
+p <- FeaturePlot(EP1NS_combined, features = scores, reduction = "umap", combine = FALSE, pt.size = 1)
+
+for(i in 1:length(p)) {
+  p[[i]] <- p[[i]] + NoAxes() + scale_colour_distiller(palette="RdBu")
+  }
+cowplot::plot_grid(plotlist = p, ncol=3)
+ggsave(file.path(plot_dir, "4_UMAP_scores.pdf"), width=9, height=5, dpi=300)
+```   
+
+# Violin plots
+Plot Violin plots of scores 
+
+```{r Vln plots, fig.width = 8, fig.height = 8, fig.align="center"}
+scores <- c('NPC_like', 'Mesenchymal', 'Radial_glia', 'Ependymal', 'Neuroepithelial', 'Cycling')
+titles <- c('NPC-like', 'Mesenchymal', 'Radial glia-like', 'Ependymal-like', 'Neuroepithelial-like', 'Cycling')
+
+p <- VlnPlot(EP1NS_combined, features = scores, group.by = 'sample', combine = FALSE, pt.size=0, cols = col_model) 
+
+for(i in 1:length(p)) {
+    p[[i]] <- p[[i]] + NoLegend() +
+      labs (y='Module score, AU', x='', title = titles[[i]]) + 
+      scale_fill_manual(values = col_model) + 
+      geom_boxplot(outlier.shape=NA, width=0.1, fill="white") +
+      stat_compare_means(aes(label = after_stat(p.signif)), 
+                         method = 't.test', 
+                         size = 5, 
+                         label.y.npc = 0.95, 
+                         label.x.npc = 0.5, 
+                         ) + NoLegend() +
+      theme_vln
+  }
+plot_grid(plotlist = p, ncol=3)
+ggsave(file.path(plot_dir, "5_VlnPlot_scores.pdf"), width=8, height=8)
+```
+
+Plot Violin plots of selected scores 
+
+```{r Vln plots 2, fig.width = 7, fig.height = 4, fig.align="center"}
+plot_grid(p[[5]], p[[1]], p[[4]], ncol = 3) 
+ggsave(file.path(plot_dir, "6_VlnPlot_scores_selected.pdf"), width=7, height=4)
+```
+
+# Violin plots
+Plot Violin plots of markers 
+
+```{r Vln plot markers, fig.width = 12, fig.height = 3, fig.align="center"}
+markers <- c('VIM', 'TAGLN2', 'NES', 'DCX', 'TUBB3', 'SOX11', 'CCDC40', 'S100B')
+
+p <- VlnPlot(EP1NS_combined, features = markers, group.by = 'sample', combine = FALSE, pt.size=0, cols = col_model) 
+
+for(i in 1:length(p)) {
+    p[[i]] <- p[[i]] + NoLegend() +
+      labs (y='Gene expression', x='') + 
+      scale_fill_manual(values = col_model) + 
+      geom_boxplot(outlier.shape=NA, width=0.1, fill="white") +
+      stat_compare_means(aes(label = after_stat(p.signif)), 
+                         method = 't.test', 
+                         label.x.npc = 0.5, 
+                         label.y.npc = 0.92, 
+                         label.x = 1.3
+                         ) + 
+         theme_vln +
+      NoLegend()
+  }
+plot_grid(plotlist = p, ncol=8)
+ggsave(file.path(plot_dir, "7_VlnPlot_markers.pdf"), width=12, height=3)
+```
+
+Plot Violin plots of markers for Varun
+
+```{r Vln plot markers2, fig.width = 5, fig.height = 3, fig.align="center"}
+markers <- c('VIM', 'DCX', 'CCDC40')
+
+p <- VlnPlot(EP1NS_combined, features = markers, group.by = 'sample', combine = FALSE, pt.size=0, cols = col_model) 
+
+for(i in 1:length(p)) {
+    p[[i]] <- p[[i]] + NoLegend() +
+      labs (y='Gene expression', x='') + 
+      scale_fill_manual(values = col_model) + 
+      geom_boxplot(outlier.shape=NA, width=0.1, fill="white") +
+      stat_compare_means(aes(label = after_stat(p.signif)), 
+                         method = 't.test', 
+                         label.x.npc = 0.5, 
+                         label.y.npc = 0.92, 
+                         label.x = 1.3
+                         ) + 
+         theme_vln +
+      NoLegend()
+  }
+plot_grid(plotlist = p, ncol=3)
+ggsave(file.path(plot_dir, "7_VlnPlot_markers2.pdf"), width=5, height=3)
+```
+
+# Barplot 
+
+Barplot of label transfer
+```{r barplot singleR, fig.width = 5, fig.height = 4, fig.align="center"}
+## Bar plot
+plot_bar(EP1NS_combined, EP1NS_combined$sample, EP1NS_combined$SingleR.labels, col = col_cluster_label_transfer) 
+ggsave(file.path(plot_dir, "8_Barplot_label_transfer_sample.pdf"), width=5, height=4)
+```
+
+Barplot of high vs low cycling cells
+```{r barplot cycling cells, fig.width = 4, fig.height = 4, fig.align="center"}
+## Bar plot
+plot_bar(EP1NS_combined, EP1NS_combined$sample, EP1NS_combined$Cycling_prop, col = c('red', 'black')) 
+ggsave(file.path(plot_dir, "8b_Barplot_cycling.pdf"), width=4, height=4)
+```
+
+
+# Cell state plot
+
+Plot distribution of samples on the hierarchy plot
+```{r cellstate plot, fig.width = 9, fig.height = 4, fig.align="center"}
+## Cell state plot
+  # define relative meta module scores (like in Tirosh)
+  y <- ifelse(EP1NS_combined$Ependymal > EP1NS_combined$NPC_like, EP1NS_combined$Neuroepithelial - EP1NS_combined$Ependymal, EP1NS_combined$Neuroepithelial - EP1NS_combined$NPC_like)
+  x <- EP1NS_combined$Ependymal - EP1NS_combined$NPC_like
+  
+  hierarchy <- cbind(x,y)
+  hierarchy <- as.data.frame(hierarchy)
+  hierarchy$sample <- EP1NS_combined$sample
+  
+  ggplot(hierarchy, aes(x = x, y = y)) +
+  geom_point(aes(color = sample), size = 1) +
+    scale_colour_manual(values= col_model) +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") + 
+    scale_x_continuous(limits = c(-0.5, 0.5)) + 
+    scale_y_continuous(limits = c(-1, 2)) + 
+    geom_text(aes(x=-0.3, label="NPC-like", y=-0.7), size=4) +
+    geom_text(aes(x=0.3, label="Ependymal-like", y=-0.7), size=4) +
+    geom_text(aes(x=0.15, label="Early-progenitor-like", y=2), size=4, hjust=1, colour = 'black') + 
+    theme_cellstate_plot + 
+    labs(x = 'NPC-like <------> Ependymal-like', y = 'Neuroepithelial-like score') +
+    facet_wrap(~sample,
+               ncol = 2,
+                scales = "free_y") 
+  ggsave(file.path(plot_dir, "9_CellState_plot_NMF.pdf"), width=9, height=4)
+
+```
+`
+
