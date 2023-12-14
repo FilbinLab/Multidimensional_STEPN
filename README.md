@@ -4,12 +4,10 @@
 
 * FASTQ files can be found in the following directory: `/labs/mfilbin/homes/biagi/PanCancer/Ependymoma`
 
-* **Code to reproduce manuscript analyses**
+### **Code to reproduce manuscript analyses**
 
 Fig. 1: oncoplot summarizing the clinical information of the samples profiled by single-cell analysis
 
-
-test
 
 ## Coculture processing
 Experiment to determine the cell state shifts between EP1NS cells cultures alone (monoculture) or with rat neurons and astrocytes (coculture).
