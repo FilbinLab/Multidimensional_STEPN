@@ -198,3 +198,118 @@ draw(Heatmap(nmf_factor_cor, col = hm_colors(100), cluster_rows = F, cluster_col
              layer_fun = function(j, i, x, y, width, height, fill) {
                grid.rect(x = x, y = y, width = width, height = height, gp = gpar(col = "grey", lwd = 0.5, fill = NA))}))
 dev.off()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+################################################################################
+## BT1873 (K27M): 20231115__203753__BT1873_BT1733 - 0011155-Region_1.qs
+################################################################################
+data <- qread('/n/scratch3/users/c/cao385/Xenium/results/20231115__203753__BT1873_BT1733/0011155-Region_1/0011155-Region_1.qs')
+
+DimPlot(data, group.by = 'SCT_snn_res.0.3', cols = clusterExperiment::bigPalette, pt.size = 0.3, raster = FALSE) +
+  theme_bw() +
+  labs(title = '', x = '', y = '') +
+  theme(panel.background = element_rect(colour = "black", size = 1),
+        plot.title = element_text(hjust = 0.5, angle = 0, size = 15, face = "bold", vjust = 1),
+        axis.ticks.length = unit(0, "cm"), axis.text = element_text(size = 0),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        plot.caption = element_text(hjust = 0.5, size = 16))
+
+
+
+base_panel <- fread(glue('{base_dir}/Base_Panel.tsv'))
+base_panel <- base_panel %>% filter(!Annotation %in% c('Astrocyte', 'OPC'))
+base_panel <- lapply(split(base_panel, f = base_panel$Annotation), function(x) x$Gene)
+base_panel <- base_panel[c(grep('Immune', names(base_panel)), grep('NormalBrain', names(base_panel)))]
+
+custom_panel <- fread(glue('{base_dir}/Customize_Panel.tsv'))
+custom_panel <- custom_panel %>% filter(!Type %in% c('DMG', 'Ependymoma'))
+custom_panel <- lapply(split(custom_panel, f = custom_panel$Program), function(x) x$Gene)
+
+geneList <- c(custom_panel, base_panel)
+
+
+
+markers <- read.csv('/n/scratch3/users/c/cao385/Xenium/results/20231115__203753__BT1873_BT1733/0011155-Region_1/markers.csv')
+geneList2 <- lapply(geneList, function(x) x[x %in% rownames(data)])
+geneList2 <- geneList2[unlist(lapply(geneList2, length)) > 2]
+cm_norm <- as.matrix(log2(LayerData(data, 'counts')/10+1))
+cm_mean <- log2(Matrix::rowMeans(LayerData(data, 'counts'))+1)
+cm_center <- cm_norm - rowMeans(cm_norm)
+
+mks <- markers %>% filter(resolution == 0.3) %>% group_by(cluster) %>% top_n(30, wt = avg_log2FC)
+mks <- lapply(split(mks, f = mks$cluster), function(x) x$gene)
+names(mks) <- glue('Cluster_{names(mks)}')
+nmf_score <- t(scoreNmfGenes(cm_center, cm_mean, c(mks, geneList2), verbose = F))
+nmf_factor_hc <- clusterNmfFactors(nmf_score)
+nmf_factor_cor <- nmf_factor_hc$cor_coef[nmf_factor_hc$hc_obj$order, nmf_factor_hc$hc_obj$order]
+hm_colors <- rev((brewer.pal(n=9, name="RdBu")))
+hm_colors <- colorRampPalette(colors = hm_colors)
+fontcolors <- ifelse(grepl('Cluster_', rownames(nmf_factor_cor)), 'red', 'darkgreen')
+fontfaces <- ifelse(grepl('Cluster_', rownames(nmf_factor_cor)), 'bold', 'plain')
+rowAnno <- rowAnnotation(rows = anno_text(rownames(nmf_factor_cor), gp = gpar(fontface = fontfaces, col = fontcolors, fontsize = 8)))
+Heatmap(nmf_factor_cor, col = hm_colors(100), cluster_rows = F, cluster_columns = F, show_column_dend = F, right_annotation = rowAnno,
+        show_row_dend = F, show_row_names = F, show_column_names = F, name = 'cor', row_names_gp = gpar(fontsize = 8),
+        layer_fun = function(j, i, x, y, width, height, fill) {
+          grid.rect(x = x, y = y, width = width, height = height, gp = gpar(col = "grey", lwd = 0.5, fill = NA))})
+
+
+Idents(data) <- data$SCT_snn_res.0.3
+data <- RenameIdents(data, '12' = 'AC-like', '7' = 'AC-like', '0' = 'AC-like', '6' = 'AC-like', '4' = 'AC-like', '10' = 'AC-like', '8' = 'Neurons', '9' = 'MES2-like', '1' = 'OPC-like', '3' = 'OPC-like', '11' = 'OPC-like', '5' = 'MES1-like', '2' = 'Tcells', '13' = 'Tcells')
+
+DimPlot(data, cols = colors_to_use, pt.size = 0.5, raster = FALSE) +
+  theme_bw() +
+  labs(title = '', x = '', y = '') +
+  theme(panel.background = element_rect(colour = "black", size = 1),
+        plot.title = element_text(hjust = 0.5, angle = 0, size = 15, face = "bold", vjust = 1),
+        axis.ticks.length = unit(0, "cm"), axis.text = element_text(size = 0),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        plot.caption = element_text(hjust = 0.5, size = 16))
+
+
+DotPlot(data, cols = c('lightgrey', 'red'),
+        c('CCL4', ## Inflammatory
+          'CD48', 'CD52', 'S100A4', ## Monocytes
+          'IFITM3', ## IFN TAM
+          'TGFBI', 'GPNMB', ## Hypoxic TAM
+          'PDCD1', 'CTLA4'
+        )) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.text=element_text(size = 8))
+
+
+base_panel <- fread(glue('{base_dir}/Base_Panel.tsv'))
+custom_panel <- fread(glue('{base_dir}/Customize_Panel.tsv'))
+
+DotPlot(data, cols = c('lightgrey', 'red'),
+        base_panel %>% filter(grepl('Immune', Annotation)) %>% pull(Gene)) +
+  theme(axis.text.x = element_text(angle = 90), axis.text=element_text(size = 8))
+
+#custom_panel %>% filter(Type == 'Normal') %>% pull(Gene)
+#base_panel %>% filter(grepl('Immune', Annotation)) %>% pull(Gene)
+
+data <- qread('/n/scratch3/users/c/cao385/Xenium/results/20231115__203753__BT1873_BT1733/0011155-Region_1/0011155-Region_1.qs')
+Idents(data) <- data$SCT_snn_res.0.3
+data <- RenameIdents(data, '12' = 'AC-like', '7' = 'AC-like', '0' = 'AC-like', '6' = 'AC-like', '4' = 'AC-like', '10' = 'AC-like', '8' = 'Neurons', '9' = 'MES2-like', '1' = 'OPC-like', '3' = 'OPC-like', '11' = 'OPC-like', '5' = 'MES1-like', '2' = 'Tcells', '13' = 'Tcells')
+data$Annotation <- ifelse(Idents(data) %in% 'Tcells', 'Immune', 'Malignant')
+
+data <- BuildNicheAssay(object = data, fov = "fov", group.by = "Annotation", niches.k = 8, neighbors.k = 30)
+celltype.plot <- ImageDimPlot(data, group.by = "Annotation", size = 0.5, cols = colors_to_use[1:2], dark.background = F) + ggtitle("Cell type")
+niche.plot <- ImageDimPlot(data, group.by = "niches", size = 0.5, dark.background = F) + ggtitle("Niches") + scale_fill_manual(values = colors_to_use)
+celltype.plot | niche.plot
+
+t(table(data$Annotation, data$niches))
