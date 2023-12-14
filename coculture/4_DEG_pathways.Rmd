@@ -13,10 +13,10 @@ output:
 ```{r, setup, include = FALSE}
 library(knitr)
 opts_chunk$set(
-  echo = TRUE, cache = TRUE, warning = FALSE, comment = FALSE)
+  echo = TRUE, cache = FALSE, warning = FALSE, comment = FALSE)
 ```
 
-```{r, preparation environment}
+```{r message=FALSE, warning=FALSE}
 # Load packages -----------------------------------
 library(dplyr)
 library(Seurat)
@@ -62,11 +62,11 @@ EP1NS_combined$sample <- factor(x = EP1NS_combined$sample,
 ```
 
 # Identify differentially expressed genes
-```{r genes, fig.width = 5, fig.height = 4, fig.align="center"}
+```{r find marker genes}
 Idents(EP1NS_combined) = 'sample' 
 markers <- FindAllMarkers(
   EP1NS_combined,
-  logfc.threshold = 0.5,
+  #logfc.threshold = 0.5,
   min.pct = 0.25,
   test.use = "wilcox"
 )
@@ -80,18 +80,30 @@ write.csv(markers, file.path(plot_dir, "1_markers_coculture_vs_monoculture.csv")
 markers_coculture <- markers %>% 
   filter(cluster %in% c("Coculture"))
 
+# create custom key-value pairs for 'high', 'low', 'mid' expression by fold-change
+  # this can be achieved with nested ifelse statements
+  keyvals <- ifelse(
+    markers_coculture$avg_log2FC < -2, 'grey',
+      ifelse(markers_coculture$avg_log2FC > 2, 'red',
+        'black'))
+  keyvals[is.na(keyvals)] <- 'black'
+  names(keyvals)[keyvals == 'red'] <- 'Upregulated in coculture'
+  names(keyvals)[keyvals == 'grey'] <- 'Upregulated in monoculture'
+  
 
 EnhancedVolcano::EnhancedVolcano(markers_coculture,
                                  x = 'avg_log2FC', # fold change statistic to plot
                                  y = 'p_val_adj', # significance values
                                  lab = markers_coculture$gene, # labels for points
                                  pCutoff = 1e-05, # p value cutoff (default)
-                                 FCcutoff = 1, # fold change cutoff (default)
+                                 FCcutoff = 2, # fold change cutoff (default)
                                  title = NULL, # no title
                                  subtitle = NULL, # or subtitle
                                  caption = NULL, # or caption
-                                 drawConnectors = TRUE, # add some fun arrows
-                                 labSize = 3  # smaller labels
+                                 #drawConnectors = TRUE, # add some fun arrows
+                                 labSize = 3,  # smaller labels
+                                colAlpha = 1,
+                                 colCustom = keyvals
 ) +
   # change the overall theme
   theme_bw() +
