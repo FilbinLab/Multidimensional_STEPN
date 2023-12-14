@@ -33,9 +33,6 @@ if (!dir.exists(data_dir)){dir.create(data_dir, recursive = T)}
 source(file.path(resource_dir, 'Plot_style.R'))
 source(file.path(resource_dir, 'single_cell_preprocessing_helper_functions.R'))
 
-# Define color palette
-col_model <- c( '#A7DBD8FF', '#F38630FF')
-
 
 # load count matrices, create Seurat object and add annotation as metadata -----------------------------------
 
@@ -60,23 +57,22 @@ seurat_obj <- RunFullSeurat_v5(cm, samples, doBatch = F,
 metadata_coculture <- seurat_obj@meta.data
   # rename name of mono and coculture in the metadata column metadata coculture
   metadata_coculture <- metadata_coculture %>% 
-    mutate(model = ifelse(model == 'EP1NSMonoCulture', 'Monoculture', 'Coculture'))
+    mutate(sample = ifelse(sample == 'EP1NSMonoCulture', 'Monoculture', 'Coculture'))
   seurat_obj <- AddMetaData(seurat_obj, metadata_coculture)
 
 ## Reorder metadata info
-seurat_obj$model <- factor(x = seurat_obj$model, 
+seurat_obj$sample <- factor(x = seurat_obj$sample, 
                                   levels = c("Monoculture", "Coculture"))
 
 
 
-## Score cells for EPN (ZFTA::RELA) scores identified in patient cohort 
+## Score cells for EPN (ZFTA::RELA) scores identified in patient cohort  -----------------------------------
 # Load tumor signatures
 ref.gene.EPN <- qread(file.path(resource_dir, "ZFTA_frozen_DE_list_signature1_MergedNPCs2.qs"))
 # rename
 names(ref.gene.EPN) <- c('NPC_like', 'Mesenchymal', 'Radial_glia', 'Ependymal', 'Neuroepithelial', 'Cycling')
 # select top 100 genes per program
-ref.gene.EPN <- lapply(ref.gene.EPN, select_top_100)
-
+ref.gene.EPN <- lapply(ref.gene.EPN,head,100)
 
 
 # score tumors
@@ -107,7 +103,7 @@ seurat_obj <- AddModuleScore(object = seurat_obj, assay = 'RNA', features = ref.
   
   
   
-# Use SingleR to transfer labels
+# Use SingleR to transfer labels -----------------------------------
     ## SingleR
     # transform into single cell object 
     seurat.sce <- as.SingleCellExperiment(seurat_obj)
@@ -122,10 +118,11 @@ seurat_obj <- AddModuleScore(object = seurat_obj, assay = 'RNA', features = ref.
                            labels=ref$Metaprogram, de.n=50)
     # visualize results
     table <- table(pred_seurat$labels)
+    table
     
     # add predicted labels to Seurat object
     seurat_obj[["SingleR.labels"]] <- pred_seurat$labels
     
-# Save dataset
+# Save dataset -----------------------------------
 saveRDS(seurat_obj, file.path(data_dir, "Mono_co_culture_merged.rds"))
     

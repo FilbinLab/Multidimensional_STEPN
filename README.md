@@ -23,10 +23,10 @@ The remaining goodQC runs are stored under the following folders:
 231103 - MonoCulture, 4 plates `/labs/mfilbin/homes/biagi/Demultiplexing/231103`
 
 
-1. Demultiplexing. Samples demultiplexed using standard code under Demultiplexing.
+**1. Demultiplexing.** Samples demultiplexed using standard code under Demultiplexing.
 
-2. QC. Script `0_qc.R` was used to remove low quality cells
+**2. QC.** Script `1_qc.R` was used to remove low quality cells
 
-3. Processing. Script `2_Processing_coculture_only.R` used to create a Seurat object, score cells for metaprograms identified in frozen ZFTA-RELA patient cohort.
+**3. Processing.** Script `2_Processing_coculture_only.R` used to create a Seurat object, score cells for metaprograms identified in frozen ZFTA-RELA patient cohort.
 
-4. Plots. Script `3_plots_Mono_co_culture_only.R` used to generate plots for final figures
+**4. Plots.** Script `3_plots_Mono_co_culture_only.R` used to generate plots for final figures
