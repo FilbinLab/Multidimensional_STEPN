@@ -27,9 +27,12 @@ The remaining goodQC runs are stored under the following folders
 
 2. Generate the count matrices, TPM and QC files for each sample. 
 First, copy files into O2 using the following lines 
-`rsync -avzP /labs/mfilbin/Demultiplexing/231207 sad167@transfer.rc.hms.harvard.edu:/n/scratch/users/s/sad167/EPN`
+```rsync -avzP /labs/mfilbin/Demultiplexing/231207 sad167@transfer.rc.hms.harvard.edu:/n/scratch/users/s/sad167/EPN```
+
 `rsync -avzP /labs/mfilbin/homes/biagi/Demultiplexing/231116 sad167@transfer.rc.hms.harvard.edu:/n/scratch/users/s/sad167/EPN/`
+
 `rsync -avzP /labs/mfilbin/homes/biagi/Demultiplexing/231103 sad167@transfer.rc.hms.harvard.edu:/n/scratch/users/s/sad167/EPN/`
+
 - Then, use the scripts inside the preprocessing folder.
 
 `while IFS=, read -r samplename type path; do
