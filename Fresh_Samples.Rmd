@@ -1,0 +1,673 @@
+---
+title: "Ependymoma Fresh"
+author: "CAOBJr"
+date: "`r Sys.Date()`"s
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(data.table)
+library(infercnv)
+library(tidyverse)
+library(cluster)
+library(factoextra)
+library(dendextend)
+library(weights)
+
+base_dir <- '/n/scratch/users/c/cao385/Ependymoma/dj83'
+resource_dir <- '/home/cao385/Projects/General-Codes/Resources'
+
+source(file.path(resource_dir, 'single_cell_preprocessing_helper_functions.R'))
+source(file.path(resource_dir, 'inferCNV_helper_functions.R'))
+source(file.path(resource_dir, 'Plotting_helper_functions.R'))
+
+## Load house keeping genes
+hkgenes <- read.csv(file.path(base_dir, 'resources/tirosh_house_keeping.txt'), skip = 1) %>%
+  pull(1)
+
+gene_order_file <- file.path(resource_dir, 'hg19_clean_gen_pos.txt')
+ext_ctrl <- file.path(resource_dir, 'ctrl_data')
+```
+
+
+## Quality Control
+```{r}
+analysis_dir <- file.path(base_dir, "analysis/ZFTA_fresh/qc")
+if (!dir.exists(analysis_dir)){dir.create(analysis_dir, recursive = T)}
+
+sample_names <- list.files(file.path(base_dir, 'data/ZFTA_fresh/counts'), pattern = 'cm_*')
+sample_names <- gsub('cm_|.csv.gz', '', sample_names)
+
+for (sample in sample_names) {
+  # sample <- sample_names[1]
+  
+  dir.create(file.path(analysis_dir, sample))
+  
+  ## Load count matrix
+  cm <- fread(list.files(file.path(base_dir, "data/ZFTA_fresh/counts"), pattern = glue('cm_{sample}.csv'), full.names = T), data.table = F) %>% 
+    column_to_rownames("V1")
+  
+  ## Load alignment qc
+  qc_align <- read.csv(list.files(file.path(base_dir, "data/ZFTA_fresh/counts"), pattern = glue('qc_{sample}.csv'), full.names = T)) %>%
+    column_to_rownames('name')
+  
+  ## Match cell names if necessary and check cell names match
+  ## Subset qc_align to keep only those within cm
+  qc_align <- qc_align[colnames(cm), ]
+  
+  ## Make a vector of sample names
+  samples <- structure(qc_align[,"sample"], names = rownames(qc_align))
+  
+  ## Compute QC metrics on all cells
+  qc_raw_data <- calculateQcMetrics(cm, hkgenes)
+  ## Add total aligned reads
+  qc_raw_data$nAligned <- qc_align$nAligned
+  ## Compute alignment rate
+  qc_raw_data$align_rate <- qc_align$nAligned/qc_align$nTotal
+  ## Add sample-plate labels
+  qc_raw_data$sample_plate <- paste(qc_raw_data$sample, qc_raw_data$plate, sep = "_")
+  
+  
+  ## Histogram of total number of genes
+  p1 <- ggplot(qc_raw_data, aes(x=gene)) + geom_histogram(bins=50) +
+    #scale_x_continuous(breaks=seq(0,15000,1000)) +
+    geom_vline(xintercept = 1E3, color="red", linetype="dashed", size=1) +
+    ggtitle("Total number of gene") +
+    xlab("Total number of genes") + ylab("Number of cells") +
+    theme_classic() + theme(plot.title = element_text(hjust = 0.5, face="bold", size=14),
+                            axis.title = element_text(face="bold", size=14),
+                            axis.text = element_text(face="bold", size=14),
+                            legend.title = element_text(face="bold", size=16),
+                            legend.text = element_text(size=14))
+  
+  ## Histogram of total number of genes (log10 scale)
+  p2 <- ggplot(qc_raw_data, aes(x=gene)) + geom_histogram(bins=50) +
+    scale_x_log10(breaks = c(10, 100, 1E3, 1E4)) +
+    geom_vline(xintercept = 1E3, color="red", linetype="dashed", size=1) +
+    ggtitle("Total number of gene (log10)") +
+    xlab("Log10 total number of genes") + ylab("Number of cells") +
+    theme_classic() + theme(plot.title = element_text(hjust = 0.5, face="bold", size=14),
+                            axis.title = element_text(face="bold", size=14),
+                            axis.text = element_text(face="bold", size=14),
+                            legend.title = element_text(face="bold", size=16),
+                            legend.text = element_text(size=14))
+  
+  ## Histogram of total number of aligned reads (log10 scale)
+  p3 <- ggplot(qc_raw_data, aes(x=nAligned)) + geom_histogram(bins=50) +
+    scale_x_log10(breaks = c(10, 100, 1E3, 1E4, 1E5, 1E6)) +
+    geom_vline(xintercept = 1E4, color="red", linetype="dashed", size=1) +
+    ggtitle("Total number of aligned reads (log10)") +
+    xlab("Log10 total number of aligned reads") + ylab("Number of cells") +
+    theme_classic() + theme(plot.title = element_text(hjust = 0.5, face="bold", size=14),
+                            axis.title = element_text(face="bold", size=14),
+                            axis.text = element_text(face="bold", size=14),
+                            legend.title = element_text(face="bold", size=16),
+                            legend.text = element_text(size=14))
+  
+  ## Histogram of alignment rate
+  p4 <- ggplot(qc_raw_data, aes(x=align_rate)) + geom_histogram(bins=50) +
+    ggtitle("Alignment rate") +
+    geom_vline(xintercept = 0.1, color="red", linetype="dashed", size=1) +
+    scale_x_continuous(breaks = seq(0,0.8,0.1)) +
+    xlab("Alignment rate") + ylab("Number of cells") +
+    theme_classic() + theme(plot.title = element_text(hjust = 0.5, face="bold", size=14),
+                            axis.title = element_text(face="bold", size=14),
+                            axis.text = element_text(face="bold", size=14),
+                            legend.title = element_text(face="bold", size=16),
+                            legend.text = element_text(size=14))
+  (p1+p2)/(p3+p4)
+  ggsave(glue("{sample}-QC_histogram_nGene_nAligned.pdf"), path = file.path(analysis_dir, sample), width = 12, height = 8)
+  
+  
+  ## Determine cutoff
+  sample_plate <- qc_raw_data$sample_plate
+  
+  ## Cutoff per plate (mean - 2*sd)
+  tmp <- log10(qc_raw_data$gene+1)
+  cutoff_per_plate <- sapply(unique(sample_plate), function(x){
+    tmp2 <- tmp[sample_plate == x]
+    return(mean(tmp2) - 2*sd(tmp2))
+  })
+  qc_raw_data$log_gene <- tmp
+  
+  ## Try a single and/or plate-specific cutoff 
+  nGene_cutoff <- 1000
+  qc_raw_data$pass_qc_1 <- qc_raw_data$gene >= nGene_cutoff
+  qc_raw_data$pass_qc_2 <- sapply(rownames(qc_raw_data), 
+                                  function(x) qc_raw_data[x, "log_gene"] >= cutoff_per_plate[qc_raw_data[x, "sample_plate"]]) 
+  
+  ## Filter based on different cutoffs (nGene, nAligned, align_rate)
+  align_rate_cutoff <- 0.1
+  qc_raw_data$pass_qc <- qc_raw_data$pass_qc_1 & 
+    qc_raw_data$pass_qc_2 &
+    qc_raw_data$align_rate >= align_rate_cutoff
+  
+  
+  ggplot(data = qc_raw_data, aes(x = gene, y = align_rate, color = pass_qc)) + geom_point() +
+    geom_hline(yintercept = align_rate_cutoff, color="red", linetype="dashed", size=1) +
+    geom_vline(xintercept = nGene_cutoff, color="red", linetype="dashed", size=1) +
+    xlab("Total number of genes\n") + ylab("Alignment rate\n") +
+    theme_classic() + theme(plot.title = element_text(hjust = 0.5, face="bold", size=16),
+                            axis.title = element_text(face="bold", size=16),
+                            axis.text = element_text(face="bold", size=14),
+                            legend.title = element_text(face="bold", size=16),
+                            legend.text = element_text(size=14))
+  ggsave(glue("{sample}-genes_vs_hk.png"), path = file.path(analysis_dir, sample), width = 8, height=6)
+  
+  
+  ## Preprocessing: filtering on cells
+  ## Filter and normalize cm without filtering genes
+  cm <- cm[,qc_raw_data$pass_qc]
+  cm_norm <- log2(cm/10+1)
+  cm_center <- cm_norm - rowMeans(cm_norm)
+  cm_list <- list("raw_data" = cm, "norm_data" = cm_norm, "center_data" = cm_center)
+  
+  ## Identify sufficiently expressed genes
+  gene_cutoff <- 4
+  gene_cell_cutoff <- 20
+  genes_to_keep <- rowSums(cm_list$raw_data >= 2^gene_cutoff) >= gene_cell_cutoff
+  genes_to_keep <- rownames(cm_list$raw_data)[genes_to_keep]
+  
+  ## Subset sample
+  samples <- samples[colnames(cm_list$raw_data)]
+  ## Calculate and store qc metrics for filtered and unfiltered data
+  qc_filtered_data <- calculateQcMetrics(cm_list$raw_data, hkgenes)
+  
+  rm(cm); rm(cm_norm); rm(cm_center); gc()
+  
+  ## Save preprocessed results
+  saveRDS(cm_list, file = glue("{analysis_dir}/{sample}/{sample}-cm_list.rds"))
+  saveRDS(qc_raw_data, file = glue("{analysis_dir}/{sample}/{sample}-qc_raw_data.rds"))
+  saveRDS(qc_filtered_data, file = glue("{analysis_dir}/{sample}/{sample}-qc_filtered_data.rds"))
+  saveRDS(samples, file = glue("{analysis_dir}/{sample}/{sample}-samples.rds"))
+  saveRDS(genes_to_keep, file = glue("{analysis_dir}/{sample}/{sample}-genes_to_keep.rds"))
+}
+
+cm <- do.call(cbind, lapply(list.files(analysis_dir, pattern = '-cm_list.rds', recursive = T, full.names = T), function(x) {
+  tmp <- readRDS(x)
+  tmp$raw_data
+}))
+
+qc_raw_data <- do.call(rbind, lapply(list.files(analysis_dir, pattern = '-qc_raw_data.rds', recursive = T, full.names = T), function(x) {
+  readRDS(x)
+}))
+
+cm_norm <- log2(cm/10+1)
+cm_center <- cm_norm - rowMeans(cm_norm)
+cm_list <- list("raw_data" = cm, "norm_data" = cm_norm, "center_data" = cm_center)
+
+samples <- structure(unlist(lapply(strsplit(colnames(cm), '\\.'), `[[`, 1)), names = colnames(cm))
+
+## Identify sufficiently expressed genes
+gene_cutoff <- 4
+gene_cell_cutoff <- 20
+genes_to_keep <- rowSums(cm_list$raw_data >= 2^gene_cutoff) >= gene_cell_cutoff
+genes_to_keep <- rownames(cm_list$raw_data)[genes_to_keep]
+
+## Subset sample
+samples <- samples[colnames(cm_list$raw_data)]
+## Calculate and store qc metrics for filtered and unfiltered data
+qc_filtered_data <- calculateQcMetrics(cm_list$raw_data, hkgenes)
+
+rm(cm); rm(cm_norm); rm(cm_center); gc()
+
+## Save preprocessed results
+saveRDS(cm_list, file = file.path(analysis_dir, "cm_list.rds"))
+saveRDS(qc_raw_data, file = file.path(analysis_dir, "qc_raw_data.rds"))
+saveRDS(qc_filtered_data, file = file.path(analysis_dir, "qc_filtered_data.rds"))
+saveRDS(samples, file = file.path(analysis_dir, "samples.rds"))
+saveRDS(genes_to_keep, file = file.path(analysis_dir, "genes_to_keep.rds"))
+
+
+## Barplot of good/poor quality cells for each sample
+## # of cells that pass QC in each sample
+crosstab <- table(qc_raw_data$sample, qc_raw_data$pass_qc)
+crosstab <- data.frame(crosstab)
+colnames(crosstab) <- c("Sample", "Good_quality", "Frequency")
+crosstab$Sample = factor(crosstab$Sample, levels = crosstab%>% filter(Good_quality == "TRUE") %>% arrange(Frequency)%>% pull(Sample))
+ggplot(crosstab, aes_string(x="Sample", y="Frequency", fill="Good_quality")) +
+  geom_bar(stat="identity", color="black") + ggtitle("QC of each sample\n") +
+  geom_hline(yintercept = 100, color = "black", linetype = "dashed", size = 1) +
+  xlab("") + ylab("Frequency\n") +
+  labs(fill="Good quality") +
+  theme_classic() + theme(plot.title = element_text(hjust = 0.5, face="bold", size=32),
+                          axis.title = element_text(face="bold", size=16),
+                          axis.text.x = element_text(face = "bold", size = 8, angle = 45, hjust = 1),
+                          axis.text.y = element_text(face = "bold", size = 14),
+                          legend.title = element_text(size=14, face="bold"),
+                          legend.text = element_text(size=18),
+                          plot.margin = margin(10,10,10,60))
+ggsave("num_cells_pass_qc.pdf.pdf", path = analysis_dir, width = 8, height = 6)
+
+## % of cells that pass QC in each sample
+crosstab <- table(qc_raw_data$sample, qc_raw_data$pass_qc)
+crosstab <- crosstab/rowSums(crosstab)
+crosstab <- data.frame(crosstab)
+colnames(crosstab) <- c("Sample", "Good_quality", "Percentage")
+crosstab$Sample = factor(crosstab$Sample, levels = crosstab%>% filter(Good_quality == "TRUE") %>% arrange(Percentage)%>% pull(Sample))
+ggplot(crosstab, aes(x = Sample, y = Percentage, fill = Good_quality)) +
+  geom_bar(stat = "identity") +
+  geom_hline(yintercept = 0.5, color = "red", linetype = "dashed", size = 1) +
+  ggtitle("Percentage of good quality cells in each sample") +
+  coord_flip() +
+  theme_classic() +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 14))
+ggsave("percentage_cells_pass_qc.pdf", path = analysis_dir, width = 8, height = 6)
+```
+
+
+## Infering CNV
+```{r}
+qc_dir <- file.path(base_dir, "analysis/ZFTA_fresh/qc")
+inferCNV_analysis_folder <- file.path(base_dir, "analysis/ZFTA_fresh/inferCNV")
+inferCNV_fig_folder <- file.path(base_dir, "analysis/ZFTA_fresh/inferCNV/figures")
+if (!dir.exists(inferCNV_analysis_folder)){dir.create(inferCNV_analysis_folder, recursive = T)}
+if (!dir.exists(inferCNV_fig_folder)){dir.create(inferCNV_fig_folder, recursive = T)}
+
+## Load count matrix, sample name and gene order file
+## Load sample names and count matrix
+cm_list <- readRDS(file.path(qc_dir, "cm_list.rds"))
+samples <- readRDS(file.path(analysis_dir, "samples.rds"))
+
+## Name original samples vector
+orig_samples <- samples
+names(orig_samples) <- names(samples)
+
+## Load chromosome orders of genes 
+gene_order <- read.table(gene_order_file, header = F, sep = "\t", row.names = 1)
+
+## Generate new cm and sample with external reference 
+## Load and name normal control data, merge them with all samples and save the complete df
+addNormalControl(ext_ctrl, inferCNV_analysis_folder, cm_list$raw_data, orig_samples, type = 'fresh')
+rm(cm_list); gc()
+
+## Load complete df for cm and samples
+cm <- readRDS(file.path(inferCNV_analysis_folder, "cm_exp_ctrl.rds"))
+samples <- readRDS(file.path(inferCNV_analysis_folder, "samples_exp_ctrl.rds"))
+
+## Prepare input data (cm and annotations) for inferCNV
+## Construct a vector of initial characterization of malignancy for each cell
+## All normal controls are normal (either mg or od)
+## All cells from patient samples are treated as malignant at this moment 
+malig_status <- ifelse(samples == "mg" | samples == "od", samples, paste("malignant", samples, sep="_"))
+
+## Write out cm and malignancy_status as inputs for inferCNV
+fwrite(cm, file = file.path(inferCNV_analysis_folder, 'counts.matrix'), sep = "\t", quote = FALSE, row.names = TRUE, col.names = TRUE)
+
+## Write tab deliminated cell annotations
+write.table(malig_status, file = file.path(inferCNV_analysis_folder, "cellAnnotations.txt"), sep = "\t", quote = FALSE, row.names = TRUE, col.names = FALSE)
+
+## Run inferCNV
+infercnv_obj <- CreateInfercnvObject(raw_counts_matrix = file.path(inferCNV_analysis_folder, "counts.matrix"),
+                                    annotations_file = file.path(inferCNV_analysis_folder, "cellAnnotations.txt"),
+                                    delim = "\t",
+                                    gene_order_file = gene_order_file,
+                                    ref_group_names = c("mg", "od"))
+
+# perform infercnv operations to reveal cnv signal
+out_dir <- file.path(inferCNV_analysis_folder, "out_dir")
+infercnv_obj <- infercnv::run(infercnv_obj,
+                             cutoff = 1,  # use 1 for smart-seq, 0.1 for 10x-genomics
+                             out_dir = out_dir,  # dir is auto-created for storing outputs
+                             cluster_by_groups = T,   # cluster
+                             denoise = T,
+                             HMM = T,
+                             plot_steps = F, 
+                             num_threads = 8, 
+                             analysis_mode = 'samples', 
+                             write_expr_matrix = T)
+
+# OPTIONAL
+# Generate final plot where we scale maximum and minimum relative to expression = 1.
+infercnv::plot_cnv(infercnv_obj,
+                   out_dir = file.path(inferCNV_analysis_folder, "out_dir_2"),
+                   cluster_by_groups = T,
+                   color_safe_pal = FALSE,
+                   x.center = 1,
+                   x.range = c(0.5,1.5),
+                   title = "inferCNV",
+                   obs_title = "Observations (Cells)",
+                   ref_title = "References (Cells)",
+                   output_filename = "heatmap",
+                   hclust_method = "ward.D2",
+                   write_expr_matrix = TRUE)
+
+
+## Normalized gene expressions of predicted tumor cells
+observations <- fread(file.path(inferCNV_analysis_folder, 'out_dir/infercnv.observations.txt'), sep = " ", data.table = F) %>% 
+  column_to_rownames('V1')
+
+## Normalized gene expressions of predicted normal cells
+references <- fread(file.path(inferCNV_analysis_folder, 'out_dir/infercnv.references.txt'), sep = " ", data.table = F) %>% 
+  column_to_rownames('V1')
+
+## Concatnate
+all_cnv_values <- cbind(observations, references)
+## Labels for obs vs ref
+obs_ref <- c(rep("obs", dim(observations)[2]), rep("ref", dim(references)[2]))
+names(obs_ref) <- c(colnames(observations), colnames(references))
+
+## CRITICAL: sort the order of cells in cnv_values and obs_ref to the same as cm
+all_cnv_values <- all_cnv_values[,names(malig_status)]
+obs_ref <- obs_ref[names(malig_status)]
+all_cnv_values <- all_cnv_values - 1
+saveRDS(all_cnv_values, file.path(inferCNV_analysis_folder, "all_cnv_values.rds"))
+saveRDS(obs_ref, file.path(inferCNV_analysis_folder, "obs_ref.rds"))
+```
+
+
+## CNV hierarchical clustering
+```{r}
+qc_dir <- file.path(base_dir, "analysis/ZFTA_fresh/qc")
+inferCNV_analysis_folder <- file.path(base_dir, "analysis/ZFTA_fresh/inferCNV/HC/")
+inferCNV_fig_folder <- file.path(base_dir, "analysis/ZFTA_fresh/inferCNV/HC/figures")
+if (!dir.exists(inferCNV_analysis_folder)){dir.create(inferCNV_analysis_folder, recursive = T)}
+if (!dir.exists(inferCNV_fig_folder)){dir.create(inferCNV_fig_folder, recursive = T)}
+
+# Load data
+cm <- readRDS(file.path(inferCNV_analysis_folder, "../cm_exp_ctrl.rds"))
+samples <- readRDS(file.path(inferCNV_analysis_folder, "../samples_exp_ctrl.rds"))
+all_cnv_values <- readRDS(file.path(inferCNV_analysis_folder, "../all_cnv_values.rds"))
+obs_ref <- readRDS(file.path(inferCNV_analysis_folder, "../obs_ref.rds"))
+gene_order <- read.table(gene_order_file, header = F, sep = "\t", row.names = 1)
+
+# Hierarchical clustering 
+cnv_hc_each_sample <- list()
+cnv_cutree_each_sample <- list()
+weights_list <- list()
+
+for (sample in sort(unique(samples))){
+  ## Subset each sample + (mg and od)
+  to_subset <- (samples == sample | samples == "mg" | samples == 'od')
+  message("======================================")
+  message("Processing sample: ", sample)
+  message("Start time: ", Sys.time())
+  ## Compute weights
+  weights <- apply(all_cnv_values[,to_subset], 1, var)
+  weights_list[[sample]] <- weights
+  ## Compute pairwise correlations and distances
+  pairwise_cor <- wtd.cors(all_cnv_values[,to_subset], weight = weights) 
+  pairwise_dist <- 1 - pairwise_cor
+  ## Hierarchical clustering and cutree 
+  hc <- hclust(as.dist(pairwise_dist), method="ward.D2")
+  cnv_hc_each_sample[[sample]] <- hc
+  cnv_cutree_each_sample[[sample]] <- cutree(hc, 4)
+  message("End time: ", Sys.time())
+}
+
+saveRDS(cnv_hc_each_sample, file.path(inferCNV_analysis_folder, "cnv_hc_raw.rds"))
+
+
+## Print out cutree results 
+cnv_cutree_table <- list()
+for (sample in sort(unique(samples))){
+  print("======================")
+  print(sample)
+  print(table(samples[names(cnv_cutree_each_sample[[sample]])], cnv_cutree_each_sample[[sample]]))
+  cnv_cutree_table[[sample]] <- table(samples[names(cnv_cutree_each_sample[[sample]])], cnv_cutree_each_sample[[sample]])
+}
+names(cnv_cutree_table) <- sort(unique(samples))
+
+
+## call CNV
+## Store normal clusters in a list
+normal_clusters <- lapply(cnv_cutree_table, function(x) which((x["mg",] + x["od",]) >= 5))
+try (if(any(names(cnv_cutree_each_sample) != names(normal_clusters))) stop("cutree results list and normal clusters list should have identical names for elements"))
+
+## Classify each cell as Normal (F) vs Tumor (T) based on normal_clusters list 
+call_cnv_res = NULL
+for (i in seq(length(normal_clusters))){
+  sample = names(normal_clusters)[i]
+  #print(sample)
+  normal_clust = normal_clusters[[i]]
+  #print(normal_clust)
+  hc_clust_res = cnv_cutree_each_sample[[i]]
+  #print(head(hc_clust_res))
+  sample_names = sapply(names(hc_clust_res), function(x) unlist(strsplit(x, split = ".", fixed = T))[1])
+  #print(head(sample_names))
+  hc_clust_res = hc_clust_res[sample_names == sample]
+  tmp = ifelse(hc_clust_res %in% normal_clust, F, T)
+  names(tmp) = names(hc_clust_res)[sample_names == sample]
+  call_cnv_res = c(call_cnv_res, tmp)
+}
+
+## Generate a named vector for mg and od, and label them as normal 
+mg_names = names(samples)[samples == "mg"]
+mg_res = rep(F, length(mg_names))
+names(mg_res) = mg_names
+od_names = names(samples)[samples == "od"]
+od_res = rep(F, length(od_names))
+names(od_res) = od_names
+
+## Concatenate CNV calling for all samples and normal control 
+call_cnv_res_complete = c(call_cnv_res, mg_res, od_res)
+call_cnv_res_complete = call_cnv_res_complete[names(samples)]
+call_cnv_res = call_cnv_res_complete[names(samples)[obs_ref == "obs"]]
+
+## Store CNV calling for all samples alone and all samples + normal control 
+saveRDS(call_cnv_res, file.path(inferCNV_analysis_folder, "call_cnv.rds"))
+saveRDS(call_cnv_res_complete, file.path(inferCNV_analysis_folder, "call_cnv_w_ctrl.rds"))
+
+## Save cutree results
+hc_res = sapply(unique(samples[obs_ref == "obs"]), function(x){
+  tmp = cnv_cutree_each_sample[[x]]
+  tmp = tmp[names(tmp) %in% names(obs_ref)[obs_ref == "obs"]]
+})
+
+hc_res = unlist(hc_res)
+tmp = lapply(names(hc_res), 
+                           function(x) unlist(strsplit(x, split = ".", fixed = T))[2:4])
+tmp2 = sapply(tmp, function(x) paste(x[1], x[2], x[3], sep = "."))
+names(hc_res) = tmp2
+
+saveRDS(hc_res, file.path(inferCNV_analysis_folder, "cnv_hc_res.rds"))
+```
+
+
+```{r}
+inferCNV_analysis_folder <- file.path(base_dir, "analysis/ZFTA_fresh/inferCNV/Seurat")
+inferCNV_fig_folder <- file.path(base_dir, "analysis/ZFTA_fresh/inferCNV/Seurat/figures")
+if (!dir.exists(inferCNV_analysis_folder)){dir.create(inferCNV_analysis_folder, recursive = T)}
+if (!dir.exists(inferCNV_fig_folder)){dir.create(inferCNV_fig_folder, recursive = T)}
+
+
+## Load data
+## Load cm and samples 
+cm <- readRDS(file.path(inferCNV_analysis_folder, "../cm_exp_ctrl.rds"))
+samples <- readRDS(file.path(inferCNV_analysis_folder, "../samples_exp_ctrl.rds"))
+
+## Load cnv status inferred by inferCNV
+cnv_stat <- readRDS(file.path(inferCNV_analysis_folder, "../HC/call_cnv_w_ctrl.rds"))
+obs_ref <- readRDS(file.path(inferCNV_analysis_folder, "../obs_ref.rds"))
+
+
+## Preprocessing with Seurat
+genes <- readRDS(file.path(inferCNV_analysis_folder, "../../qc/genes_to_keep.rds"))
+
+
+## Create seurat project
+seurat_obj <- preprocessSeuratObject(cm[genes, ], 
+                                    scale.factor = 1E5,
+                                    do.scale = F, do.center = T,
+                                    project = "Ependymoma_Fresh")
+
+
+## Add samples and subtype as meta.data 
+seurat_obj <- AddMetaData(seurat_obj, samples, "sample")
+seurat_obj <- AddMetaData(seurat_obj, obs_ref, "type")
+seurat_obj <- AddMetaData(seurat_obj, cnv_stat, "cnv")
+
+
+## PCA
+num_pc <- 50
+seurat_obj <- RunPCA(
+  object = seurat_obj, 
+  features = VariableFeatures(object = seurat_obj), 
+  npcs = num_pc
+)
+
+## UMAP plot colored by clustering and samples
+numPC <- 20
+resolution <- 0.6
+reduction_type <- "pca"
+dims <- numPC
+
+seurat_obj <- seurat_obj %>% 
+  RunUMAP(reduction = reduction_type, dims = 1:dims) %>% 
+  FindNeighbors(reduction = reduction_type, dims = 1:dims, force.recalc = TRUE) %>% 
+  FindClusters(resolution = resolution)
+
+saveRDS(seurat_obj, file = file.path(inferCNV_analysis_folder, "seurat_obj.rds"))
+
+
+## UMAP plot colored by clustering and samples
+## By clustering
+DimPlot(object = seurat_obj, 
+        label = TRUE, 
+        pt.size = 1, 
+        label.size = 8, 
+        cols = colors_to_use) + NoAxes() + NoLegend()
+ggsave("UMAP_clusters.pdf", path = inferCNV_fig_folder, width=8, height=8)
+
+## By samples
+DimPlot(object = seurat_obj, 
+         group.by = "sample", 
+         label = TRUE, 
+         pt.size = 1, 
+         label.size = 0, 
+        cols = colors_to_use) + NoAxes()
+ggsave("UMAP_sample.pdf", path=inferCNV_fig_folder, width=10, height=8)
+
+## By obs vs ref
+DimPlot(object = seurat_obj, 
+         group.by = "type", 
+         label = TRUE, 
+         pt.size = 1, 
+         label.size = 0, 
+         cols = colors_to_use) + NoAxes()
+ggsave("UMAP_type.pdf", path=inferCNV_fig_folder, width=10, height=8)
+
+## By CNV
+DimPlot(object = seurat_obj, 
+         group.by = "cnv",
+         cells = colnames(seurat_obj)[seurat_obj$type == "obs"],
+         cols = colors_to_use,
+         label = TRUE, 
+         pt.size = 1, 
+         label.size = 0) + NoAxes()
+ggsave("UMAP_cnv.pdf", path=inferCNV_fig_folder, width=10, height=8)
+
+
+FeaturePlot(seurat_obj, 
+            features = c("CD14", "CD3E", "CD4",
+                          "MBP", "PLP1", "TF",
+                          "OLIG1", "PDGFRA", "APOD",
+                          "CTGF", "IFITM1", "MGP"),
+            ncol = 3,
+            cols = c("lightgrey", "red"))
+ggsave("normal_marker_genes.jpg", path=inferCNV_fig_folder, width=9, height=12)
+
+
+## Map gene counts to tSNE
+FeaturePlot(seurat_obj, "nFeature_RNA", cols = c("lightgrey", "red"))
+
+
+## Map mito counts to tSNE
+mito.genes <- grep(pattern = "^MT-", x = rownames(seurat_obj), value = TRUE)
+percent.mito <- Matrix::colSums(cm[mito.genes,])/Matrix::colSums(cm)
+seurat_obj <- AddMetaData(seurat_obj, 
+                          metadata = percent.mito, 
+                          col.name = "percent_mito")
+FeaturePlot(seurat_obj, "percent_mito", cols = c("lightgrey", "red"))
+ggsave("mito_genes.jpg", path=inferCNV_fig_folder, width=8, height=6)
+
+
+## Map alignment rate onto tSNE
+qc_raw_data <- readRDS(file.path(inferCNV_analysis_folder, "../../qc/qc_raw_data.rds"))
+seurat_obj@meta.data$alignment_rate = qc_raw_data[colnames(seurat_obj), "align_rate"]
+tmp <- is.na(seurat_obj@meta.data$alignment_rate)
+seurat_obj@meta.data$alignment_rate[tmp] = 0.5
+FeaturePlot(seurat_obj, "alignment_rate", cols = c("lightgrey", "red"))
+ggsave("align_rate.jpg", path=inferCNV_fig_folder, width=8, height=6)
+
+
+## Malignant vs non-malignant cell calling 
+
+#############Strategy###############
+## All cells in normal clusters and without CNV = Normal
+## All cells in samples without cnv are Malignabnt (not used)
+## All cells NOT in normal clusters and with CNV = Malignant 
+## The rest = Low-quality 
+####################################
+#DimPlot(seurat_obj, group.by = 'seurat_clusters', cols = cls, label = T, label.box = T)
+normal_clusters <- c(3,4,7,8)
+#samples_without_cnv = c("GBM1297", "MUV60r2", "OPBGINF0035", "ICGCPA134", "R102", "RMH8684", "ROMEros1", "S7GWKMOH", "S7W22G45", "ViennaALK1")
+
+call_tumor <- function(x){
+  ## cells in normal cluster are normal cells 
+  if (seurat_obj@meta.data$seurat_clusters[x] %in% normal_clusters &
+      !seurat_obj@meta.data$cnv[x]){
+    return("Normal")
+  #}else if (seurat_obj@meta.data$sample[x] %in% samples_without_cnv){
+  #  return("Malignant")
+  ## All others classified based on having CNV or not 
+  }else if (!(seurat_obj@meta.data$seurat_clusters[x] %in% normal_clusters) &
+            seurat_obj@meta.data$cnv[x]){
+     return("Malignant") 
+  }else{
+    return("Noisy")
+  }
+}
+tumor_stat_w_ctrl = sapply(seq(length(colnames(seurat_obj))), call_tumor)
+names(tumor_stat_w_ctrl) = colnames(seurat_obj)
+
+## Remove normal controls 
+tumor_stat = tumor_stat_w_ctrl[(seurat_obj@meta.data$sample != "mg" & 
+                                  seurat_obj@meta.data$sample != "od")]
+saveRDS(tumor_stat, file = file.path(inferCNV_analysis_folder, "call_tumor.rds"))
+
+## tSNE colored by malignancy
+seurat_obj$tumor = tumor_stat_w_ctrl
+DimPlot(object = seurat_obj, group.by = "tumor", 
+        cols = c("#F8766D", "lightgrey", "#00BFC4"),
+        cells = colnames(seurat_obj)[seurat_obj$type == "obs"],
+        label = T, label.size = 8, pt.size = 1) & NoAxes()
+ggsave("UMAP_tumor.pdf", path=inferCNV_fig_folder, width = 10, height = 8)
+
+seurat_obj$annotation <- ifelse(tumor_stat != 'Malignant', 'Normal', tumor_stat)
+
+
+## Remove normal controls 
+cond = (seurat_obj@meta.data$sample != "mg" &
+        seurat_obj@meta.data$sample != "od")
+annot_stat = seurat_obj@meta.data$annotation[cond]
+names(annot_stat) = colnames(seurat_obj)[cond]
+saveRDS(annot_stat, file = file.path(inferCNV_analysis_folder, "annotation.rds"))
+
+
+## Save count matrices
+to_subset = seurat_obj$type == "obs"
+cm_postqc = GetAssayData(seurat_obj, slot="counts")
+cm_postqc = cm_postqc[, to_subset]
+
+to_subset = seurat_obj$type == "obs" & seurat_obj$tumor == "Malignant"
+cm_malignant = GetAssayData(seurat_obj, slot="counts")
+cm_malignant = cm_malignant[, to_subset]
+
+saveRDS(cm_postqc, file.path(inferCNV_analysis_folder, "cm_postqc.rds"))
+saveRDS(cm_malignant, file.path(inferCNV_analysis_folder, "cm_malignant.rds"))
+
+
+data <- RunFullSeurat_v5(cm = cm_malignant, metadata = seurat_obj@meta.data, doBatch = T, var2batch = 'sample', batchMethod = 'harmony', dims = 0.8, project = 'Ependymoma_Fresh', verbose = T)
+saveRDS(data, file.path(base_dir, 'analysis/seurat_obj_malignant.rds'))
+
+DimPlot(data, group.by = 'sample', split.by = 'sample', reduction = 'tsne.harmony')
+```
