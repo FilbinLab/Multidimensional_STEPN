@@ -17,31 +17,19 @@ if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
 data_dir <- file.path(base_dir, 'analysis/data')
 if (!dir.exists(data_dir)){dir.create(data_dir, recursive = T)}
 
-resource_dir  <- file.path(base_dir, 'scripts/resources')
-source(file.path(resource_dir, 'Plotting_functions.R'))
-
 ## Create directories to store individual outputs
 if (!dir.exists(file.path(plot_dir, 'individual'))){dir.create(file.path(plot_dir, 'individual'), recursive = T)}
 
 samples <- c('0010540-Region_1', '0010540-Region_2', '0010540-Region_3', '0010540-Region_4', 
              '0010553-Region_1', '0010553-Region_2', '0010553-Region_3', '0010553-Region_4')
 names(samples) <- c('0010540-Region_1', '0010540-Region_2', '0010540-Region_3', '0010540-Region_4', 
-                    '0010553-Region_1', '0010553-Region_2', '0010553-Region_3', '0010553-Region_4')
+             '0010553-Region_1', '0010553-Region_2', '0010553-Region_3', '0010553-Region_4')
 
 for (i in seq_along(samples)) {
   if (!dir.exists(file.path(plot_dir, paste0('individual/', names(samples)[i])))){dir.create(file.path(plot_dir, paste0('individual/', names(samples)[i])), recursive = T)}
   
 }
-
-# Color palettes -------------------------------------
-colors_groups <- c("gray30","#F99E93FF","#9E5E9BFF","#74ADD1FF","#ACD39EFF","#96410EFF", 'grey80',
-                   '#ef3c2d',  '#ffba08', '#002855')
-names(colors_groups) <- c("Cycling", "Neuroepithelial-like", "Radial glia-like", 
-                                     "NPC-like" ,"Ependymal-like", "Mesenchymal", "Unassigned", 
-                          "Immune", "Endothelial", "Neurons")
-
-col_niches <- c('#58148e','#fe7434','#fea802','#d94a8c','#ff0000','#15a2a2','#b4418e','#ea515f','#d0a03b','#0466c8')
-
+    
 
 
 # Load gene list of Xenium panel -------------------------------------
@@ -106,13 +94,13 @@ data <- RenameIdents(data,
                      '1' = 'Ependymal-like', 
                      '2' = 'Ependymal-like', 
                      '3' = 'NPC-like', 
-                     '4' = 'NPC-like', 
-                     '5' = 'NPC-like',
+                     '4' = 'Unassigned', 
+                     '5' = 'Unassigned',
                      '6' = 'NPC-like', 
                      '7' = 'Ependymal-like', 
                      '8' = 'Neuroepithelial-like', 
                      '9' = 'Immune', 
-                     '10' = 'NPC-like', 
+                     '10' = 'Unassigned', 
                      '11' = 'Mesenchymal',
                      '12' = 'NPC-like', 
                      '13' = 'Neuroepithelial-like')
@@ -125,45 +113,19 @@ DotPlot(data,
         assay = 'SCT', scale = TRUE) + 
   paletteer::scale_colour_paletteer_c("viridis::mako", direction = -1) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.text=element_text(size = 8))
-ggsave(file.path(plot_dir, "1_DotPlot_0010540-Region_1.pdf"), width=13, height=4)
+ggsave(file.path(plot_dir, "/1_DotPlot_0010540-Region_1.pdf"), width=13, height=4)
 
 # Export metadata with cell names and new annotation
 cell_id <- data@meta.data %>% select(group)
 cell_id <-  cell_id %>%
   rownames_to_column(var = "cell_id")
+
 write_csv(cell_id, file.path(data_dir, "0010540-Region_1_cell_id.csv"))
 
 # Export table with total number of cells
 table <- data@meta.data %>% 
   group_by(group) %>% summarize(n())
 write_csv(table, file.path(data_dir, "2_cell_number_0010540-Region_1.csv"))
-
-# Visualize  distribution clusters 
-ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.4, 
-             dark.background = F) + ggtitle("Clusters")
-ggsave(file.path(plot_dir, "2_ImageDimPlot_0010540-Region_1.pdf"), width=8, height=5)
-
-
-# Perform niche analysis
-data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
-
-# Plot niche images
-celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4, 
-                              dark.background = F) + ggtitle("Cell type")
-niche.plot <- ImageDimPlot(data, group.by = "niches", fov = "fov",  cols = col_niches, border.size = NA, size = 0.4, 
-                           dark.background = F) + ggtitle("Niches") 
-celltype.plot | niche.plot
-ggsave(file.path(plot_dir, "2_ImageDimPlot_0010540-Region_1_niche.pdf"), width=16, height=5)
-
-# Save data table with frequency
-niche_freq <- as.data.frame(t(table(data$group, data$niches)))
-write_csv(niche_freq, file.path(data_dir, "3_0010540-Region_1_niche_cell_number.csv"))
-
-# Plot niche frequency
-plot_bar(data, data$niches, data$group, colors_groups) 
-ggsave(file.path(plot_dir, "3_0010540-Region_1_Barplot_niches.pdf"), width=6, height=5)
-
-
 
 
 # Load Xenium output 0010540-Region_2 (processed by Carlos) -------------------------------------
@@ -223,34 +185,6 @@ table <- data@meta.data %>%
   group_by(group) %>% summarize(n())
 write_csv(table, file.path(data_dir, "2_cell_number_0010540-Region_2.csv"))
 
-# Visualize  distribution clusters 
-ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.4, 
-             dark.background = F) + ggtitle("Clusters")
-ggsave(file.path(plot_dir, "2_ImageDimPlot_0010540-Region_2.pdf"), width=8, height=5)
-
-
-# Perform niche analysis
-data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
-
-# Plot niche images
-celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4, 
-                              dark.background = F) + ggtitle("Cell type")
-niche.plot <- ImageDimPlot(data, group.by = "niches", fov = "fov",  cols = col_niches, border.size = NA, size = 0.4, 
-                           dark.background = F) + ggtitle("Niches") 
-celltype.plot | niche.plot
-ggsave(file.path(plot_dir, "2_ImageDimPlot_0010540-Region_2_niche.pdf"), width=16, height=5)
-
-# Save data table with frequency
-niche_freq <- as.data.frame(t(table(data$group, data$niches)))
-write_csv(niche_freq, file.path(data_dir, "3_0010540-Region_2_niche_cell_number.csv"))
-
-# Plot niche frequency
-plot_bar(data, data$niches, data$group, colors_groups) 
-ggsave(file.path(plot_dir, "3_0010540-Region_2_Barplot_niches.pdf"), width=6, height=5)
-
-
-
-
 
 
 # Load Xenium output 0010540-Region_3 (processed by Carlos) -------------------------------------
@@ -275,11 +209,11 @@ data <- RenameIdents(data,
                      '0' = 'NPC-like', 
                      '1' = 'Ependymal-like', 
                      '2' = 'Mesenchymal', 
-                     '3' = 'NPC-like', 
-                     '4' = 'NPC-like', 
+                     '3' = 'Tumor-c24', 
+                     '4' = 'Tumor-c24', 
                      '5' = 'Ependymal-like',
                      '6' = 'NPC-like', 
-                     '7' = 'NPC-like', 
+                     '7' = 'Normal neurons', 
                      '8' = 'NPC-like', 
                      '9' = 'Ependymal-like', 
                      '10' = 'Neuroepithelial-like', 
@@ -288,7 +222,7 @@ data <- RenameIdents(data,
                      '13' = 'Neuroepithelial-like', 
                      '14' = 'Unassigned', 
                      '15' = 'Mesenchymal',
-                     '16' = 'NPC-like')
+                     '16' = 'Tumor-c24')
 
 data[["group"]] <- Idents(data)
 
@@ -311,33 +245,6 @@ write_csv(cell_id, file.path(data_dir, "0010540-Region_3_cell_id.csv"))
 table <- data@meta.data %>% 
   group_by(group) %>% summarize(n())
 write_csv(table, file.path(data_dir, "2_cell_number_0010540-Region_3.csv"))
-
-# Visualize  distribution clusters 
-ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.4, 
-             dark.background = F) + ggtitle("Clusters")
-ggsave(file.path(plot_dir, "2_ImageDimPlot_0010540-Region_3.pdf"), width=8, height=5)
-
-
-# Perform niche analysis
-data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
-
-# Plot niche images
-celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4, 
-                              dark.background = F) + ggtitle("Cell type")
-niche.plot <- ImageDimPlot(data, group.by = "niches", fov = "fov",  cols = col_niches, border.size = NA, size = 0.4, 
-                           dark.background = F) + ggtitle("Niches") 
-celltype.plot | niche.plot
-ggsave(file.path(plot_dir, "2_ImageDimPlot_0010540-Region_3_niche.pdf"), width=16, height=5)
-
-# Save data table with frequency
-niche_freq <- as.data.frame(t(table(data$group, data$niches)))
-write_csv(niche_freq, file.path(data_dir, "3_0010540-Region_3_niche_cell_number.csv"))
-
-# Plot niche frequency
-plot_bar(data, data$niches, data$group, colors_groups) 
-ggsave(file.path(plot_dir, "3_0010540-Region_3_Barplot_niches.pdf"), width=6, height=5)
-
-
 
 
 
@@ -369,7 +276,7 @@ data <- RenameIdents(data,
                      '6' = 'Mesenchymal', 
                      '7' = 'NPC-like', 
                      '8' = 'NPC-like', 
-                     '9' = 'Immune', 
+                     '9' = 'Immune_c15', 
                      '10' = 'Immune')
 
 data[["group"]] <- Idents(data)
@@ -393,37 +300,6 @@ write_csv(cell_id, file.path(data_dir, "0010540-Region_4_cell_id.csv"))
 table <- data@meta.data %>% 
   group_by(group) %>% summarize(n())
 write_csv(table, file.path(data_dir, "2_cell_number_0010540-Region_4.csv"))
-
-
-# Visualize  distribution clusters 
-ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.4, 
-             dark.background = F) + ggtitle("Clusters")
-ggsave(file.path(plot_dir, "2_ImageDimPlot_0010540-Region_4.pdf"), width=8, height=5)
-
-
-# Perform niche analysis
-data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
-
-# Plot niche images
-celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4, 
-                              dark.background = F) + ggtitle("Cell type")
-niche.plot <- ImageDimPlot(data, group.by = "niches", fov = "fov",  cols = col_niches, border.size = NA, size = 0.4, 
-                           dark.background = F) + ggtitle("Niches") 
-celltype.plot | niche.plot
-ggsave(file.path(plot_dir, "2_ImageDimPlot_0010540-Region_4_niche.pdf"), width=16, height=5)
-
-# Save data table with frequency
-niche_freq <- as.data.frame(t(table(data$group, data$niches)))
-write_csv(niche_freq, file.path(data_dir, "3_0010540-Region_4_niche_cell_number.csv"))
-
-# Plot niche frequency
-plot_bar(data, data$niches, data$group, colors_groups) 
-ggsave(file.path(plot_dir, "3_0010540-Region_4_Barplot_niches.pdf"), width=6, height=5)
-
-
-
-
-
 
 
 # Load Xenium output 0010553-Region_1 (processed by Carlos) -------------------------------------
@@ -453,7 +329,7 @@ data <- RenameIdents(data,
                      '5' = 'Neuroepithelial-like',
                      '6' = 'Immune', 
                      '7' = 'NPC-like', 
-                     '8' = 'Ependymal-like', 
+                     '8' = 'Unassigned', 
                      '9' = 'Endothelial', 
                      '10' = 'Immune',
                      '11' = 'Immune',
@@ -483,33 +359,6 @@ table <- data@meta.data %>%
 write_csv(table, file.path(data_dir, "2_cell_number_0010553-Region_1.csv"))
 
 
-# Visualize  distribution clusters 
-ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.4, 
-             dark.background = F) + ggtitle("Clusters")
-ggsave(file.path(plot_dir, "2_ImageDimPlot_0010553-Region_1.pdf"), width=8, height=5)
-
-
-# Perform niche analysis
-data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
-
-# Plot nic he images
-celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4, 
-                              dark.background = F) + ggtitle("Cell type")
-niche.plot <- ImageDimPlot(data, group.by = "niches", fov = "fov",  cols = col_niches, border.size = NA, size = 0.4, 
-                           dark.background = F) + ggtitle("Niches") 
-celltype.plot | niche.plot
-ggsave(file.path(plot_dir, "2_ImageDimPlot_0010553-Region_1_niche.pdf"), width=16, height=5)
-
-# Save data table with frequency
-niche_freq <- as.data.frame(t(table(data$group, data$niches)))
-write_csv(niche_freq, file.path(data_dir, "3_0010553-Region_1_niche_cell_number.csv"))
-
-# Plot niche frequency
-plot_bar(data, data$niches, data$group, colors_groups) 
-ggsave(file.path(plot_dir, "3_0010553-Region_1_Barplot_niches.pdf"), width=6, height=5)
-
-
-
 
 # Load Xenium output 0010553-Region_2 (processed by Carlos) -------------------------------------
 
@@ -530,17 +379,17 @@ for (res in nres) {
 Idents(data) <- data$SCT_snn_res.0.7
 data <- RenameIdents(data, 
                      '0' = 'Ependymal-like', 
-                     '1' = 'NPC-like', 
+                     '1' = 'Unassigned', 
                      '2' = 'Ependymal-like', 
                      '3' = 'Ependymal-like', 
                      '4' = 'Neuroepithelial-like', 
                      '5' = 'NPC-like',
                      '6' = 'NPC-like', 
                      '7' = 'Immune', 
-                     '8' = 'NPC-like', 
+                     '8' = 'Unassigned', 
                      '9' = 'Immune', 
                      '10' = 'Endothelial',
-                     '11' = 'NPC-like',
+                     '11' = 'Unassigned',
                      '12' = 'Ependymal-like',
                      '13' = 'Immune',
                      '14' = 'NPC-like')
@@ -569,34 +418,6 @@ write_csv(table, file.path(data_dir, "2_cell_number_0010553-Region_2.csv"))
 
 
 
-# Visualize  distribution clusters 
-ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.4, 
-             dark.background = F) + ggtitle("Clusters")
-ggsave(file.path(plot_dir, "2_ImageDimPlot_0010553-Region_2.pdf"), width=8, height=5)
-
-
-# Perform niche analysis
-data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
-
-# Plot nic he images
-celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4, 
-                              dark.background = F) + ggtitle("Cell type")
-niche.plot <- ImageDimPlot(data, group.by = "niches", fov = "fov",  cols = col_niches, border.size = NA, size = 0.4, 
-                           dark.background = F) + ggtitle("Niches") 
-celltype.plot | niche.plot
-ggsave(file.path(plot_dir, "2_ImageDimPlot_0010553-Region_2_niche.pdf"), width=16, height=5)
-
-# Save data table with frequency
-niche_freq <- as.data.frame(t(table(data$group, data$niches)))
-write_csv(niche_freq, file.path(data_dir, "3_0010553-Region_2_niche_cell_number.csv"))
-
-# Plot niche frequency
-plot_bar(data, data$niches, data$group, colors_groups) 
-ggsave(file.path(plot_dir, "3_0010553-Region_2_Barplot_niches.pdf"), width=6, height=5)
-
-
-
-
 
 
 # Load Xenium output 0010553-Region_3 (processed by Carlos) -------------------------------------
@@ -617,15 +438,15 @@ for (res in nres) {
 # Change name identities
 Idents(data) <- data$SCT_snn_res.0.7
 data <- RenameIdents(data, 
-                     '0' = 'NPC-like', 
+                     '0' = 'Unassigned', 
                      '1' = 'NPC-like', 
-                     '2' = 'NPC-like', 
+                     '2' = 'Unassigned', 
                      '3' = 'Ependymal-like', 
-                     '4' = 'Mesenchymal', 
+                     '4' = 'Neurons', 
                      '5' = 'Mesenchymal',
-                     '6' = 'NPC-like', 
+                     '6' = 'Unassigned', 
                      '7' = 'Ependymal-like', 
-                     '8' = 'NPC-like', 
+                     '8' = 'Unassigned', 
                      '9' = 'Neuroepithelial-like', 
                      '10' = 'Neuroepithelial-like',
                      '11' = 'Immune',
@@ -654,34 +475,6 @@ write_csv(cell_id, file.path(data_dir, "0010553-Region_3_cell_id.csv"))
 table <- data@meta.data %>% 
   group_by(group) %>% summarize(n())
 write_csv(table, file.path(data_dir, "2_cell_number_0010553-Region_3.csv"))
-
-
-
-# Visualize  distribution clusters 
-ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.4, 
-             dark.background = F) + ggtitle("Clusters")
-ggsave(file.path(plot_dir, "2_ImageDimPlot_0010553-Region_3.pdf"), width=8, height=5)
-
-
-# Perform niche analysis
-data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
-
-# Plot nic he images
-celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4, 
-                              dark.background = F) + ggtitle("Cell type")
-niche.plot <- ImageDimPlot(data, group.by = "niches", fov = "fov",  cols = col_niches, border.size = NA, size = 0.4, 
-                           dark.background = F) + ggtitle("Niches") 
-celltype.plot | niche.plot
-ggsave(file.path(plot_dir, "2_ImageDimPlot_0010553-Region_3_niche.pdf"), width=16, height=5)
-
-# Save data table with frequency
-niche_freq <- as.data.frame(t(table(data$group, data$niches)))
-write_csv(niche_freq, file.path(data_dir, "3_0010553-Region_3_niche_cell_number.csv"))
-
-# Plot niche frequency
-plot_bar(data, data$niches, data$group, colors_groups) 
-ggsave(file.path(plot_dir, "3_0010553-Region_3_Barplot_niches.pdf"), width=6, height=5)
-
 
 
 
@@ -740,28 +533,17 @@ table <- data@meta.data %>%
 write_csv(table, file.path(data_dir, "2_cell_number_0010553-Region_4.csv"))
 
 
-# Visualize  distribution clusters 
-ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.4, 
-             dark.background = F) + ggtitle("Clusters")
-ggsave(file.path(plot_dir, "2_ImageDimPlot_0010553-Region_4.pdf"), width=8, height=5)
 
 
-# Perform niche analysis
-data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
+# Combine tables with number of cells -------------------------------------
+tables <- list()
+for (i in seq_along(samples)) {
+  tables[[i]] <- read_csv(file.path(data_dir, paste0("2_cell_number_", names(samples)[i], ".csv")))
+}
+names(tables) <- names(samples)
 
-# Plot nic he images
-celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4, 
-                              dark.background = F) + ggtitle("Cell type")
-niche.plot <- ImageDimPlot(data, group.by = "niches", fov = "fov",  cols = col_niches, border.size = NA, size = 0.4, 
-                           dark.background = F) + ggtitle("Niches") 
-celltype.plot | niche.plot
-ggsave(file.path(plot_dir, "2_ImageDimPlot_0010553-Region_4_niche.pdf"), width=16, height=5)
+# bind dataframes into single
+table_combined <- bind_col(tables)
 
-# Save data table with frequency
-niche_freq <- as.data.frame(t(table(data$group, data$niches)))
-write_csv(niche_freq, file.path(data_dir, "3_0010553-Region_4_niche_cell_number.csv"))
 
-# Plot niche frequency
-plot_bar(data, data$niches, data$group, colors_groups) 
-ggsave(file.path(plot_dir, "3_0010553-Region_4_Barplot_niches.pdf"), width=6, height=5)
 
