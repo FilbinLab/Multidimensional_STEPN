@@ -1,0 +1,238 @@
+---
+title: "DEGs of scRNAseq results of mono- vs. co-culture of EP1NS cells"
+author: "Sara Danielli"
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+  html_notebook:
+    toc: yes
+    toc_float: yes
+---
+
+```{r, setup, include = FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = TRUE, cache = TRUE, warning = FALSE, comment = FALSE)
+```
+
+```{r message=FALSE, warning=FALSE}
+# Load packages -----------------------------------
+library(dplyr)
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(SeuratObject)
+library(data.table)
+library(tidyverse)
+library(future)
+library(clustree)
+library(clusterProfiler)
+library(ggpubr)
+library(cowplot)
+library(ggrastr)
+library(enrichplot)
+library(msigdbr)
+
+# Organize environment  -----------------------------------
+base_dir <- "/Users/sdaniell/Dropbox (Partners HealthCare)/Sara Danielli/Project/Ependymoma/9 - scRNAseq coculture"
+analysis_dir <- file.path(base_dir, 'analysis')
+resource_dir <- file.path(base_dir, 'scripts/resources')
+
+plot_dir <- file.path(analysis_dir, 'plots/DEG')
+if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
+data_dir <- file.path(analysis_dir, 'data')
+if (!dir.exists(data_dir)){dir.create(data_dir, recursive = T)}
+
+source(file.path(resource_dir, 'Plot_style_v2.R'))
+source(file.path(resource_dir, 'single_cell_preprocessing_helper_functions.R'))
+
+
+# Define color palettes  -----------------------------------
+col_model <- c( 'grey', 'red')
+col_cluster_label_transfer <- c("#F99E93FF")
+
+
+# load Seurat object -----------------------------------
+EP1NS_combined <- readRDS(file.path(data_dir, "Mono_co_culture_merged.rds"))
+# reorder model order
+EP1NS_combined$sample <- factor(x = EP1NS_combined$sample, 
+                                  levels = c("Monoculture", "Coculture"))
+
+```
+
+# Identify differentially expressed genes
+```{r genes, fig.width = 5, fig.height = 4, fig.align="center"}
+Idents(EP1NS_combined) = 'sample' 
+markers <- FindAllMarkers(
+  EP1NS_combined,
+  logfc.threshold = 0.5,
+  min.pct = 0.25,
+  test.use = "wilcox"
+)
+markers
+write.csv(markers, file.path(plot_dir, "1_markers_coculture_vs_monoculture.csv"))
+```
+
+## Explore the identified differentially expressed genes
+
+```{r volcano, fig.width = 6, fig.height = 5, fig.align="center"}
+# subset for markers of coculture only (it is the same as monoculture but with reversed sign)
+markers_coculture <- markers %>% 
+  filter(cluster %in% c("Coculture"))
+
+
+EnhancedVolcano::EnhancedVolcano(markers_coculture,
+                                 x = 'avg_log2FC', # fold change statistic to plot
+                                 y = 'p_val_adj', # significance values
+                                 lab = markers_coculture$gene, # labels for points
+                                 pCutoff = 1e-05, # p value cutoff (default)
+                                 FCcutoff = 1, # fold change cutoff (default)
+                                 title = NULL, # no title
+                                 subtitle = NULL, # or subtitle
+                                 caption = NULL, # or caption
+                                 drawConnectors = TRUE, # add some fun arrows
+                                 labSize = 3  # smaller labels
+) +
+  # change the overall theme
+  theme_bw() +
+  # move the legend to the bottom
+  theme(legend.position = "bottom")
+ggsave(file.path(plot_dir, "2_Volcano_plot_coculture.pdf"), width=6, height=5)
+
+```
+
+# Perform overrrepresentation analysis (ORA) 
+Use the [`clusterProfiler` package](https://bioconductor.org/packages/release/bioc/html/clusterProfiler.html) ([Yu *et al.* 2012](https://doi.org/10.1089/omi.2011.0118.)) to perform ORA.
+
+## Markers upregulated in coculture
+
+### Marker gene preparation
+We're interested in what pathways are over-represented in genes that are more highly expressed in co-culture. We select the top 300 upregulated genes based on fold change.
+
+```{r coculture_genes}
+markers <- markers_coculture |>
+  # Positive fold changes
+  dplyr::filter(avg_log2FC > 0) |>
+    # Significant p values
+  dplyr::filter(p_val_adj < 0.05) |>
+    # Take the "top 300" when ordering by FDR (smallest FDR values)
+  dplyr::slice_min(order_by = avg_log2FC, n = 300) |>
+  # Extract a vector of the gene symbols
+  dplyr::pull(gene)
+```
+
+
+### Gene Ontology ORA
+Now that we have our background set and our genes of interest, we're ready to run ORA using the `enrichGO()` function.
+
+```{r go_ora2}
+go_ora_results <- enrichGO(gene = markers,  # Top 300 genes
+                           #universe = background_set,  # Background genes
+                           keyType = "SYMBOL",  # Our genes are gene symbols
+                           OrgDb = org.Hs.eg.db,  # Supports conversion, if needed
+                           ont = "BP",  # Biological process
+                           pAdjustMethod = "BH",  # FDR
+                           pvalueCutoff = 0.01) 
+```
+
+And to conver the `result` slot into a data frame.
+
+```{r go_df2}
+go_result_df <- data.frame(go_ora_results@result)
+write.csv(go_result_df, file.path(plot_dir, "3_enrichGO_coculture.csv"))
+```
+
+Let's take a look at the GO sets with an adjusted p-value less than 0.01.
+
+```{r filter_padj2, live = TRUE}
+go_result_df <- go_result_df |>
+  dplyr::filter(p.adjust < 0.01)
+write.csv(go_result_df, file.path(plot_dir, "4_enrichGO_coculture_pval_01.csv"))
+
+```
+
+#### Visualizing results
+
+We can use a dot plot to visualize our significant enrichment results.
+
+```{r dotplot2, live = TRUE, fig.width = 6, fig.height = 8, fig.align="center"}
+enrichplot::dotplot(go_ora_results,  showCategory = 15)
+ggsave(file.path(plot_dir, "5_Dotplot_coculture.pdf"), width=6, height=10)
+```
+
+## Markers downregulated in coculture
+
+### Marker gene preparation
+We're interested in what pathways are over-represented in genes that are downregulated in coculture (and therefore upregulated in mono-culture)
+
+#### Markers of interest set (top 300)
+```{r FBS_genes}
+markers_down <- markers_coculture |>
+  # Positive fold changes
+  dplyr::filter(avg_log2FC < 0) |>
+    # Significant p values
+  dplyr::filter(p_val_adj < 0.05) |>
+    # Take the "top 100" when ordering by FDR (smallest FDR values)
+  dplyr::slice_min(order_by = avg_log2FC, n = 300) |>
+  # Extract a vector of the gene symbols
+  dplyr::pull(gene)
+```
+
+
+### Gene Ontology ORA
+Now that we have our background set and our genes of interest, we're ready to run ORA using the `enrichGO()` function.
+
+```{r go_ora}
+go_ora_results_down <- enrichGO(gene = markers_down,  # Top 300 genes
+                           #universe = background_set,  # Background genes
+                           keyType = "SYMBOL",  # Our genes are gene symbols
+                           OrgDb = org.Hs.eg.db,  # Supports conversion, if needed
+                           ont = "BP",  # Biological process
+                           pAdjustMethod = "BH",  # FDR
+                           pvalueCutoff = 0.01) 
+```
+
+
+The information we're most likely interested in is in the `result` slot.
+Let's convert this into a data frame that we can write to file.
+
+```{r go_df}
+go_result_df_down <- data.frame(go_ora_results_down@result)
+write.csv(go_result_df_down, file.path(plot_dir, "6_enrichGO_monoculture.csv"))
+
+```
+
+Let's take a look at the GO sets with an adjusted p-value less than 0.01.
+
+```{r filter_padj, live = TRUE}
+go_result_df_down <- go_result_df_down |>
+  dplyr::filter(p.adjust < 0.001)
+write.csv(go_result_df_down, file.path(plot_dir, "7_enrichGO_monoculture_pval_01.csv"))
+
+```
+
+Some of these columns have names that are somewhat opaque and are used for visualization, so let's briefly talk about them here!
+
+| Column name | Numerator | Denominator |
+|-------------|-----------|-------------|
+| `GeneRatio` | Number of genes in the top 100 marker genes and the specific gene set (also in `Count` column) | Number of genes in the top 100 marker genes and _any_ gene set |
+| `BgRatio`   | Number of genes in the background set and the specific gene set | Number of genes in the background set and _any_ gene set |
+
+#### Visualizing results
+
+We can use a dot plot to visualize our significant enrichment results.
+
+```{r dotplot, live = TRUE, fig.width = 6, fig.height = 8, fig.align="center"}
+enrichplot::dotplot(go_ora_results_down,  showCategory = 15)
+ggsave(file.path(plot_dir, "8_Dotplot_monoculture.pdf"), width=6, height=8)
+```
+
+
+## Print session info
+
+```{r session info}
+sessionInfo()
+
+
+
