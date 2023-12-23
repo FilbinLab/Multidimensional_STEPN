@@ -44,7 +44,7 @@ names(colors_groups) <- c("Cycling", "Neuroepithelial-like", "Radial glia-like",
                                      "NPC-like" ,"Ependymal-like", "Mesenchymal", "Unassigned", 
                           "Immune", "Endothelial", "Neurons")
 
-col_niches <- c('#58148e','#fe7434','#fea802','#d94a8c','#ff0000','#15a2a2','#b4418e','#ea515f','#d0a03b','#0466c8')
+col_niches <- c('#58148e', '#15a2a2', '#ea515f','#d0a03b','#0466c8')
 
 
 col_normal_malignant <- c('#FFC72CFF', '#582C83FF')
