@@ -9,13 +9,14 @@ library(readxl)
 library(dplyr)
 
 # Organize environment  -----------------------------------
-#base_dir <- file.path('/n/scratch/users/c/cao385/Immune/Xenium/results/20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/0010540-Region_1')
-base_dir <- file.path('/Users/sdaniell/Dropbox (Partners HealthCare)/Sara Danielli/Project/Ependymoma/12 - Xenium')
+base_dir <- file.path('/n/scratch/users/s/sad167/EPN/Xenium')
 
-plot_dir <- file.path(base_dir, 'analysis/plots')
+analysis_dir  <- file.path(base_dir, 'analysis/20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41')
+
+plot_dir <- file.path(analysis_dir, 'plots')
 if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
 
-data_dir <- file.path(base_dir, 'analysis/data')
+data_dir <- file.path(analysis_dir, 'data')
 if (!dir.exists(data_dir)){dir.create(data_dir, recursive = T)}
 
 resource_dir  <- file.path(base_dir, 'scripts/resources')
@@ -31,7 +32,7 @@ names(samples) <- c('0010540-Region_1', '0010540-Region_2', '0010540-Region_3', 
 
 for (i in seq_along(samples)) {
   if (!dir.exists(file.path(plot_dir, paste0('individual/', names(samples)[i])))){dir.create(file.path(plot_dir, paste0('individual/', names(samples)[i])), recursive = T)}
-  }
+}
 
 for (i in seq_along(samples)) {
   if (!dir.exists(file.path(data_dir, paste0('individual/', names(samples)[i])))){dir.create(file.path(data_dir, paste0('individual/', names(samples)[i])), recursive = T)}
@@ -41,7 +42,7 @@ for (i in seq_along(samples)) {
 colors_groups <- c("gray30","#F99E93FF","#9E5E9BFF","#74ADD1FF","#ACD39EFF","#96410EFF", 'grey80',
                    '#ef3c2d',  '#ffba08', '#002855')
 names(colors_groups) <- c("Cycling", "Neuroepithelial-like", "Radial glia-like", 
-                                     "NPC-like" ,"Ependymal-like", "Mesenchymal", "Unassigned", 
+                          "NPC-like" ,"Ependymal-like", "Mesenchymal", "Unassigned", 
                           "Immune", "Endothelial", "Neurons")
 
 col_niches <- c('#58148e', '#15a2a2', '#ea515f','#d0a03b','#0466c8')
@@ -58,7 +59,7 @@ unique(Xenium_panel$Program)
 
 #EPN_programs <- c("Radial glia/NPC-like","Radial glia-like", "NPC-like-2" ,"NPC-like-1" ,"MES_Hypoxia","Glio_Angiogenesis", "Ependymal-like-2","Ependymal-like-1","Ependymal")
 
-Xenium_panel_EPN <- Xenium_panel %>% filter(Type == 'Ependymoma')
+Xenium_panel_EPN <- Xenium_panel %>% filter(Type == 'Ependymoma' | Type == 'Intersection')
 
 Xenium_panel_EPN <- Xenium_panel_EPN %>% group_by(Program) %>% 
   summarise(merged_values = paste(Gene, collapse = ",")) 
@@ -98,19 +99,19 @@ resolutions_to_use <- c('SCT_snn_res.0.8', 'SCT_snn_res.0.9', 'SCT_snn_res.1', '
 
 annotation_clusters <- list (
   '0010540-Region_1' = c('0' = 'NPC-like', 
-                        '1' = 'Ependymal-like', 
-                        '2' = 'Ependymal-like', 
-                        '3' = 'NPC-like', 
-                        '4' = 'NPC-like', 
-                        '5' = 'NPC-like',
-                        '6' = 'NPC-like', 
-                        '7' = 'Ependymal-like', 
-                        '8' = 'Neuroepithelial-like', 
-                        '9' = 'Immune', 
-                        '10' = 'NPC-like', 
-                        '11' = 'Mesenchymal',
-                        '12' = 'NPC-like', 
-                        '13' = 'Neuroepithelial-like'),
+                         '1' = 'Ependymal-like', 
+                         '2' = 'Ependymal-like', 
+                         '3' = 'NPC-like', 
+                         '4' = 'NPC-like', 
+                         '5' = 'NPC-like',
+                         '6' = 'NPC-like', 
+                         '7' = 'Ependymal-like', 
+                         '8' = 'Neuroepithelial-like', 
+                         '9' = 'Immune', 
+                         '10' = 'NPC-like', 
+                         '11' = 'Mesenchymal',
+                         '12' = 'NPC-like', 
+                         '13' = 'Neuroepithelial-like'),
   '0010540-Region_2' =  c('0' = 'NPC-like', 
                           '1' = 'NPC-like', 
                           '2' = 'Ependymal-like', 
@@ -208,7 +209,7 @@ annotation_clusters <- list (
                          '7' = 'Immune', 
                          '8' = 'Immune', 
                          '9' = 'NPC-like')
-  )
+)
 
 
 
@@ -217,70 +218,70 @@ annotation_clusters <- list (
 
 # Read data
 for (i in seq_along(samples)) {
-data <- qread(file.path(base_dir, paste0('raw_data/', names(samples)[i], '.qs')))
-
-# DotPlot markers for different resolutions
-nres <- c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)
-for (res in nres) {
-  Idents(data) <- paste0("SCT_snn_res.", res)
+  data <- qread(file.path(base_dir, paste0('processed_data_Carlos/20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/', names(samples)[i], '/', names(samples)[i], '.qs')))
+  
+  # DotPlot markers for different resolutions
+  nres <- c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)
+  for (res in nres) {
+    Idents(data) <- paste0("SCT_snn_res.", res)
+    # DotPlot markers
+    DotPlot(data, cols = c('lightgrey', 'red'), features = gene_list, assay = 'SCT', scale = TRUE) +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.text=element_text(size = 6))
+    ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/0_DotPlot_res', res ,'.pdf')), width=14, height=5)
+  }
+  
+  # Change name identities
+  Idents(data) <- resolutions_to_use[i]
+  data <- RenameIdents(data, annotation_clusters[[i]])
+  data[["group"]] <- Idents(data)
+  
+  # Add information about malignant or non-malignant
+  data$malignant <- ifelse(data$group %in% c('NPC-like', 'Ependymal-like', 'Neuroepithelial-like',
+                                             'Mesenchymal'), "Malignant", "Non-malignant")
+  
   # DotPlot markers
-  DotPlot(data, cols = c('lightgrey', 'red'), features = gene_list, assay = 'SCT', scale = TRUE) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.text=element_text(size = 6))
-  ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/0_DotPlot_res', res ,'.pdf')), width=14, height=5)
-}
-
-# Change name identities
-Idents(data) <- resolutions_to_use[i]
-data <- RenameIdents(data, annotation_clusters[[i]])
-data[["group"]] <- Idents(data)
-
-# Add information about malignant or non-malignant
-data$malignant <- ifelse(data$group %in% c('NPC-like', 'Ependymal-like', 'Neuroepithelial-like',
-                                           'Mesenchymal'), "Malignant", "Non-malignant")
-
-# DotPlot markers
-DotPlot(data, 
-        features = c(gene_list, 'ZFTA-RELA-Fusion1'), 
-        assay = 'SCT', scale = TRUE) + 
-  paletteer::scale_colour_paletteer_c("viridis::mako", direction = -1) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.text=element_text(size = 8))
-ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/1_DotPlot_final.pdf')), width=13, height=4)
-
-# Export metadata with cell names and new annotation
-cell_id <- data.frame(rownames(data@meta.data), data@meta.data$group)
-rownames(cell_id) <- cell_id$rownames.data.meta.data.
-cell_id$rownames.data.meta.data. <- NULL
-write_csv(cell_id, file.path(data_dir, paste0('individual/', names(samples)[i], '/cell_id.csv')))
-
-
-# Visualize  distribution clusters 
-ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.4, 
-             dark.background = F) + ggtitle("Clusters")
-ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/2_ImageDimPlot.pdf')), width=8, height=5)
-
-ImageDimPlot(data, group.by = 'malignant', cols = col_normal_malignant, border.size = NA, size = 0.4, 
-             dark.background = F) + ggtitle("Malignancy")
-ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/3_ImageDimPlot_malignant.pdf')), width=8, height=5)
-
-
-# Perform niche analysis
-data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
-
-# Plot niche images
-celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4, 
-                              dark.background = F) + ggtitle("Cell type")
-niche.plot <- ImageDimPlot(data, group.by = "niches", fov = "fov",  cols = col_niches, border.size = NA, size = 0.4, 
-                           dark.background = F) + ggtitle("Niches") 
-celltype.plot | niche.plot
-ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/4_ImageDimPlot_niche.pdf')), width=16, height=5)
-
-# Save data table with frequency
-niche_freq <- as.data.frame(t(table(data$group, data$niches)))
-write_csv(niche_freq, file.path(data_dir, paste0('individual/', names(samples)[i], '/3_0010540-Region_1_niche_cell_number.csv')))
-
-# Plot niche frequency
-plot_bar(data, data$niches, data$group, colors_groups) 
-ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/5_BarPlot_niches.pdf')), width=6, height=5)
-
+  DotPlot(data, 
+          features = c(gene_list, 'ZFTA-RELA-Fusion1'), 
+          assay = 'SCT', scale = TRUE) + 
+    paletteer::scale_colour_paletteer_c("viridis::mako", direction = -1) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.text=element_text(size = 8))
+  ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/1_DotPlot_final.pdf')), width=13, height=4)
+  
+  # Export metadata with cell names and new annotation
+  cell_id <- data.frame(rownames(data@meta.data), data@meta.data$group)
+  rownames(cell_id) <- cell_id$rownames.data.meta.data.
+  cell_id$rownames.data.meta.data. <- NULL
+  write_csv(cell_id, file.path(data_dir, paste0('individual/', names(samples)[i], '/cell_id.csv')))
+  
+  
+  # Visualize  distribution clusters 
+  ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.4, 
+               dark.background = F) + ggtitle("Clusters")
+  ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/2_ImageDimPlot.pdf')), width=8, height=5)
+  
+  ImageDimPlot(data, group.by = 'malignant', cols = col_normal_malignant, border.size = NA, size = 0.4, 
+               dark.background = F) + ggtitle("Malignancy")
+  ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/3_ImageDimPlot_malignant.pdf')), width=8, height=5)
+  
+  
+  # Perform niche analysis
+  data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
+  
+  # Plot niche images
+  celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4, 
+                                dark.background = F) + ggtitle("Cell type")
+  niche.plot <- ImageDimPlot(data, group.by = "niches", fov = "fov",  cols = col_niches, border.size = NA, size = 0.4, 
+                             dark.background = F) + ggtitle("Niches") 
+  celltype.plot | niche.plot
+  ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/4_ImageDimPlot_niche.pdf')), width=16, height=5)
+  
+  # Save data table with frequency
+  niche_freq <- as.data.frame(t(table(data$group, data$niches)))
+  write_csv(niche_freq, file.path(data_dir, paste0('individual/', names(samples)[i], '/3_0010540-Region_1_niche_cell_number.csv')))
+  
+  # Plot niche frequency
+  plot_bar(data, data$niches, data$group, colors_groups) 
+  ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/5_BarPlot_niches.pdf')), width=6, height=5)
+  
 }
 
