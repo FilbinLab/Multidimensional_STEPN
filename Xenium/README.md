@@ -1,6 +1,13 @@
 ## Xenium 
 
+- Raw data (fresh from Xenium machine) copied in Sara's folder, under `/n/scratch/users/s/sad167/EPN/Xenium/data/raw_data`
+- Preliminary analysis from Carlos (clustering) copied in Sara's folder, under `/n/scratch/users/s/sad167/EPN/Xenium/data/processed_data_Carlos`
+
+1 - Run scripts called Xenium_rename_idents_ followed by date of run. The scripts contain the program annotations and creates preliminary graphs.
+
 - Daeun's metadata path with programs annotation: `/labs/mfilbin/homes/djeong/dj83/analysis/Xenium/samples_metadata`
+
+
 - Parameters for Jupyter session in O2:
   * *Modules to be preloaded*: `gcc/9.2.0 python/3.9.14 cmake/3.14.1 R/4.3.1`
   * *Jupyter Environment*: `source /home/cao385/envs/jupytervenv/bin/activate`
