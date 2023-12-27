@@ -3,7 +3,7 @@ library(Seurat)
 library(ggplot2)
 library(tidyverse)
 library(qs)
-library(ggpubr)
+#library(ggpubr)
 library(data.table)
 library(readxl)
 library(dplyr)
@@ -37,19 +37,6 @@ for (i in seq_along(samples)) {
 for (i in seq_along(samples)) {
   if (!dir.exists(file.path(data_dir, paste0('individual/', names(samples)[i])))){dir.create(file.path(data_dir, paste0('individual/', names(samples)[i])), recursive = T)}
 }
-
-# Color palettes -------------------------------------
-colors_groups <- c("gray30","#F99E93FF","#9E5E9BFF","#74ADD1FF","#ACD39EFF","#96410EFF", 'grey80',
-                   '#ef3c2d',  '#ffba08', '#002855')
-names(colors_groups) <- c("Cycling", "Neuroepithelial-like", "Radial glia-like", 
-                          "NPC-like" ,"Ependymal-like", "Mesenchymal", "Unassigned", 
-                          "Immune", "Endothelial", "Neurons")
-
-col_niches <- c('#58148e', '#15a2a2', '#ea515f','#d0a03b','#0466c8')
-
-
-col_normal_malignant <- c('#FFC72CFF', '#582C83FF')
-names(col_normal_malignant) <- c('Non-malignant', 'Malignant')
 
 
 
@@ -218,7 +205,7 @@ annotation_clusters <- list (
 
 # Read data
 for (i in seq_along(samples)) {
-  data <- qread(file.path(base_dir, paste0('processed_data_Carlos/20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/', names(samples)[i], '/', names(samples)[i], '.qs')))
+  data <- qread(file.path(base_dir, paste0('data/processed_data_Carlos/20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/', names(samples)[i], '/', names(samples)[i], '.qs')))
   
   # DotPlot markers for different resolutions
   nres <- c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)
@@ -227,7 +214,7 @@ for (i in seq_along(samples)) {
     # DotPlot markers
     DotPlot(data, cols = c('lightgrey', 'red'), features = gene_list, assay = 'SCT', scale = TRUE) +
       theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.text=element_text(size = 6))
-    ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/0_DotPlot_res', res ,'.pdf')), width=14, height=5)
+    ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/0_DotPlot_res', res ,'.pdf')), width=16, height=5)
   }
   
   # Change name identities
@@ -245,7 +232,7 @@ for (i in seq_along(samples)) {
           assay = 'SCT', scale = TRUE) + 
     paletteer::scale_colour_paletteer_c("viridis::mako", direction = -1) +
     theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.text=element_text(size = 8))
-  ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/1_DotPlot_final.pdf')), width=13, height=4)
+  ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/1_DotPlot_final.pdf')), width=16, height=3)
   
   # Export metadata with cell names and new annotation
   cell_id <- data.frame(rownames(data@meta.data), data@meta.data$group)
@@ -256,11 +243,11 @@ for (i in seq_along(samples)) {
   
   # Visualize  distribution clusters 
   ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.4, 
-               dark.background = F) + ggtitle("Clusters")
+               dark.background = F) + ggtitle(names(samples)[i])
   ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/2_ImageDimPlot.pdf')), width=8, height=5)
   
   ImageDimPlot(data, group.by = 'malignant', cols = col_normal_malignant, border.size = NA, size = 0.4, 
-               dark.background = F) + ggtitle("Malignancy")
+               dark.background = F) + ggtitle(names(samples)[i])
   ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/3_ImageDimPlot_malignant.pdf')), width=8, height=5)
   
   
