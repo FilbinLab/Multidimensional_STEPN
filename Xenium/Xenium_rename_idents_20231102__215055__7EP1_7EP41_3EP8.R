@@ -231,6 +231,7 @@ for (i in seq_along(samples)) {
   rownames(cell_id) <- cell_id$rownames.data.meta.data.
   cell_id$rownames.data.meta.data. <- NULL
   write_csv(cell_id, file.path(data_dir, paste0('individual/', names(samples)[i], '/cell_id.csv')))
+  write_csv(data@meta.data, file.path(data_dir, paste0('individual/metadata_', names(samples)[i], '.csv')))
   
   
   # Visualize  distribution clusters 
