@@ -80,7 +80,7 @@ saveRDS(gene_list, file.path(data_dir, 'Xenium_tumor_gene_list.rds'))
 
 
 # Define resolution to use and annotations for each tissue  -------------------------------------
-resolutions_to_use <- c('SCT_snn_res.0.3', 'SCT_snn_res.0.3', 'SCT_snn_res.0.2', 'SCT_snn_res.0.1',
+resolutions_to_use <- c('SCT_snn_res.0.3', 'SCT_snn_res.0.3', 'SCT_snn_res.0.1', 'SCT_snn_res.0.1',
                         'SCT_snn_res.0.7', 'SCT_snn_res.0.8')
 
 annotation_clusters <- list (
@@ -105,38 +105,33 @@ annotation_clusters <- list (
                          '8' = 'Ependymal-like',
                          '9' = 'NPC-like',
                          '10' = 'Ependymal-like'),
-  # wrong - to redefine once carlos generates correlations correct
   '0010814-Region_1' = c('0' = 'Ependymal-like',
-                         '1' = 'Neurons',
-                         '2' = 'Mesenchymal',
-                         '3' = 'Immune',
-                         '4' = 'Neurons',
-                         '5' = 'Immune',
-                         '6' = 'Immune',
-                         '7' = 'Neuroepithelial-like',
-                         '8' = 'Ependymal-like',
-                         '9' = 'Immune',
-                         '10' = 'Ependymal-like'),
-  # wrong - to redefine once carlos generates correlations correct
+                         '1' = 'Immune',
+                         '2' = 'NPC-like',
+                         '3' = 'Tumor-c24',
+                         '4' = 'Immune',
+                         '5' = 'Neuroepithelial-like',
+                         '6' = 'Ependymal-like',
+                         '7' = 'Mesenchymal'),
   '0010814-Region_2' = c('0' = 'Neuroepithelial-like',
-                         '1' = 'Endothelial',
-                         '2' = 'Neurons',
-                         '3' = 'Immune',
+                         '1' = 'Immune',
+                         '2' = 'NPC-like',
+                         '3' = 'Neuroepithelial-like',
                          '4' = 'Immune',
                          '5' = 'Mesenchymal',
                          '6' = 'Ependymal-like',
-                         '7' = 'Endothelial',
-                         '8' = 'Immune'),
+                         '7' = 'Mesenchymal',
+                         '8' = 'Neuroepithelial-like'),
   '0010814-Region_5' = c('0' = 'Neuroepithelial-like',
                          '1' = 'NPC-like',
-                         '2' = 'Neuroepithelial-like',
+                         '2' = 'Ependymal-like',
                          '3' = 'Endothelial',
-                         '4' = 'Immune',
-                         '5' = 'Mesenchymal',
+                         '4' = 'VLMCs',
+                         '5' = 'Neuroepithelial-like',
                          '6' = 'Immune',
                          '7' = 'Neuroepithelial-like',
                          '8' = 'Neuroepithelial-like',
-                         '9' = 'Unassigned',
+                         '9' = 'Neuroepithelial-like',
                          '10' = 'NPC-like'),
   '0010814-Region_6' = c('0' = 'Neuroepithelial-like',
                          '1' = 'Ependymal-like',
@@ -204,6 +199,8 @@ for (i in seq_along(samples)) {
   ImageDimPlot(data, group.by = 'malignant', cols = col_normal_malignant, border.size = NA, size = 0.4, 
                dark.background = F) + ggtitle(names(samples)[i])
   ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/3_ImageDimPlot_malignant.pdf')), width=8, height=5)
+}
+
 
   # Perform niche analysis
   data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
