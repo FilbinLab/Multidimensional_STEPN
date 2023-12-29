@@ -24,9 +24,11 @@ source(file.path(resource_dir, 'Plotting_functions.R'))
 ## Create directories to store individual outputs
 if (!dir.exists(file.path(plot_dir, 'individual'))){dir.create(file.path(plot_dir, 'individual'), recursive = T)}
 
-samples <- c('0010501-Region_1', '0010501-Region_2', '0010814-Region_1', '0010814-Region_2',
+samples <- c('0010501-Region_1', '0010501-Region_2', 
+             '0010814-Region_1', '0010814-Region_2',
              '0010814-Region_5', '0010814-Region_6')
-names(samples) <- c('0010501-Region_1', '0010501-Region_2', '0010814-Region_1', '0010814-Region_2',
+names(samples) <- c('0010501-Region_1', '0010501-Region_2', 
+                    '0010814-Region_1', '0010814-Region_2',
                     '0010814-Region_5', '0010814-Region_6')
 
 for (i in seq_along(samples)) {
@@ -80,7 +82,8 @@ saveRDS(gene_list, file.path(data_dir, 'Xenium_tumor_gene_list.rds'))
 
 
 # Define resolution to use and annotations for each tissue  -------------------------------------
-resolutions_to_use <- c('SCT_snn_res.0.3', 'SCT_snn_res.0.3', 'SCT_snn_res.0.1', 'SCT_snn_res.0.1',
+resolutions_to_use <- c('SCT_snn_res.0.3', 'SCT_snn_res.0.3', 
+                        'SCT_snn_res.0.1', 'SCT_snn_res.0.1',
                         'SCT_snn_res.0.7', 'SCT_snn_res.0.8')
 
 annotation_clusters <- list (
@@ -112,8 +115,9 @@ annotation_clusters <- list (
                          '4' = 'Immune',
                          '5' = 'Neuroepithelial-like',
                          '6' = 'Ependymal-like',
-                         '7' = 'Mesenchymal'),
-  '0010814-Region_2' = c('0' = 'Neuroepithelial-like',
+                         '7' = 'Mesenchymal' ),
+# to fix
+'0010814-Region_2' = c('0' = 'Neuroepithelial-like',
                          '1' = 'Immune',
                          '2' = 'NPC-like',
                          '3' = 'Neuroepithelial-like',
@@ -122,7 +126,8 @@ annotation_clusters <- list (
                          '6' = 'Ependymal-like',
                          '7' = 'Mesenchymal',
                          '8' = 'Neuroepithelial-like'),
-  '0010814-Region_5' = c('0' = 'Neuroepithelial-like',
+# to fix
+'0010814-Region_5' = c('0' = 'Neuroepithelial-like',
                          '1' = 'NPC-like',
                          '2' = 'Ependymal-like',
                          '3' = 'Endothelial',
@@ -199,8 +204,6 @@ for (i in seq_along(samples)) {
   ImageDimPlot(data, group.by = 'malignant', cols = col_normal_malignant, border.size = NA, size = 0.4, 
                dark.background = F) + ggtitle(names(samples)[i])
   ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/3_ImageDimPlot_malignant.pdf')), width=8, height=5)
-}
-
 
   # Perform niche analysis
   data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
