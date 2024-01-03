@@ -1,19 +1,14 @@
 library(qs)
 library(Seurat)
 library(tidyverse)
-#library(SCpubr)
-#library(ggplot2)
-#library(ggtrace)
 library(stringr)
-#library(dplyr)
 library(patchwork)
+library(glue)
 
 base_dir <- "/n/scratch/users/c/cao385/Ependymoma/dj83"
 script_dir <- "helper_scripts"
-preprocessing <- file.path(base_dir,script_dir, "single_cell_preprocessing_helper_functions.R")
-NMF_helper <- file.path(base_dir, script_dir, "NMF_helper_function.R")
-source(preprocessing)
-source(NMF_helper)
+source(file.path(base_dir,script_dir, "single_cell_preprocessing_helper_functions.R"))
+source(file.path(base_dir, script_dir, "NMF_helper_function.R"))
 
 seurat_dir <- file.path(base_dir, "data/seurat_objects")
 ZFTA_dir <- file.path(base_dir, "data/ZFTA_frozen/")
@@ -30,7 +25,6 @@ ref <- qread(file.path(ref_dir,"seurat objects/seurat_obj_hCortex_Kriegstein.qs"
 #  arrange(avg_log2FC, .by_group = TRUE)
 #top.markers2 <- lapply(split(top.markers2, f = top.markers2$cluster), function(x) x$gene)
 top.markers2 <- qread(glue('{base_dir}/data/Normal_ref_data/Nowakowski_earlydev_natureneuro2021/EarlyDev_markers.qs'))
-
 
 ref.genes <- read.csv(file.path(ref_dir, "Nowakowski2017_markers.csv"))
 ref.genes <- ref.genes[ref.genes$avg_diff > 0,]
@@ -78,20 +72,20 @@ ST <- AddModuleScore(
 )
 colnames(ST@meta.data)[17:19] <- names(new_list)
 
-cm_norm <- as.matrix(log2(LayerData(ST, 'counts')/10+1))
-cm_mean <- log2(Matrix::rowMeans(LayerData(ST, 'counts'))+1)
-cm_center <- cm_norm - rowMeans(cm_norm)
-nmf_score <- t(scoreNmfGenes(cm_center, cm_mean, new_list))
-ST <- AddMetaData(ST, nmf_score)
+#cm_norm <- as.matrix(log2(LayerData(ST, 'counts')/10+1))
+#cm_mean <- log2(Matrix::rowMeans(LayerData(ST, 'counts'))+1)
+#cm_center <- cm_norm - rowMeans(cm_norm)
+#nmf_score <- t(scoreNmfGenes(cm_center, cm_mean, new_list))
+#ST <- AddMetaData(ST, nmf_score)
 
 
 
-x1 = "Ependymal"
-x2 = "Neurons"
-y1 = "Neuroepithelial"
+x1 <- "Ependymal"
+x2 <- "Neurons"
+y1 <- "Neuroepithelial"
 #y1 = "RG-early"
-group.by="subtype"
-sample=ST
+group.by <- "subtype"
+sample <- ST
 
 
 variables_to_retrieve <- c(x1, x2, y1, group.by)
@@ -103,7 +97,7 @@ scores[["cell"]] <- rownames(scores)
 scores <- tidyr::tibble(scores)
 
 # Compute the scores for the X axis.
-x <- vapply(seq_len(nrow(scores)), function(x) {
+x <- pbapply::pbvapply(seq_len(nrow(scores)), function(x) {
   score_1 <- scores[x, x1] + stats::runif(1, min=0, max=0.15)
   score_2 <- scores[x, x2] + stats::runif(1, min=0, max=0.15)
   d <- max(score_1, score_2, na.rm = TRUE)
@@ -113,7 +107,7 @@ x <- vapply(seq_len(nrow(scores)), function(x) {
 
 
 # Compute the scores for the Y axis.
-y <- vapply(seq_len(nrow(scores)), function(x) {
+y <- pbapply::pbvapply(seq_len(nrow(scores)), function(x) {
   score_1 <- scores[x, x1] + stats::runif(1, min=0, max=0.15)
   score_2 <- scores[x, x2] + stats::runif(1, min=0, max=0.15)
   d <- max(score_1, score_2, na.rm = TRUE)
@@ -165,7 +159,7 @@ ggplot(df,aes(x = set_x, y = set_y, col = group.by))+
   theme(legend.text=element_text(family="Helvetica"))+
   theme(legend.title=element_blank())+
   theme(legend.direction="horizontal",legend.position="bottom")
-ggsave("/n/scratch/users/c/cao385/Ependymoma/dj83/New/ST_hierarchy_subtype.png", width = 10.5, height = 10, dpi = 500)
+ggsave("/n/scratch/users/c/cao385/Ependymoma/dj83/New/ST_hierarchy_subtype.pdf", width = 10.5, height = 10, dpi = 500)
 
 
 
@@ -184,7 +178,7 @@ p1 <- ggplot(df %>% arrange(ZFTA_RELA))+
   theme(legend.text=element_text(family="Helvetica"))+
   theme(legend.title=element_blank())+
   theme(legend.direction="horizontal",legend.position="bottom")
-ggsave(plot = p1, "/n/scratch/users/c/cao385/Ependymoma/dj83/New/ZFTA-RELA_highlight_hierarchy.png",width=10.5,height=10,dpi=500)
+ggsave(plot = p1, "/n/scratch/users/c/cao385/Ependymoma/dj83/New/ZFTA-RELA_highlight_hierarchy.pdf",width=10.5,height=10,dpi=500)
 
 p2 <- ggplot(df %>% arrange(ZFTA_Cluster1))+
   geom_point(aes(x=set_x, y=set_y,color=ZFTA_Cluster1),size=1)+
@@ -198,7 +192,7 @@ p2 <- ggplot(df %>% arrange(ZFTA_Cluster1))+
   theme(legend.text=element_text(family="Helvetica"))+
   theme(legend.title=element_blank())+
   theme(legend.direction="horizontal",legend.position="bottom")
-ggsave(plot = p2, "/n/scratch/users/c/cao385/Ependymoma/dj83/New/ZFTA-Cluster 1_highlight_hierarchy.png",width=10.5,height=10,dpi=500)
+ggsave(plot = p2, "/n/scratch/users/c/cao385/Ependymoma/dj83/New/ZFTA-Cluster 1_highlight_hierarchy.pdf",width=10.5,height=10,dpi=500)
 
 p3 <- ggplot(df %>% arrange(ZFTA_Cluster2))+
   geom_point(aes(x=set_x, y=set_y,color=ZFTA_Cluster2),size=1)+
@@ -212,7 +206,7 @@ p3 <- ggplot(df %>% arrange(ZFTA_Cluster2))+
   theme(legend.text=element_text(family="Helvetica"))+
   theme(legend.title=element_blank())+
   theme(legend.direction="horizontal",legend.position="bottom")
-ggsave(plot = p3, "/n/scratch/users/c/cao385/Ependymoma/dj83/New/ZFTA-Cluster 2_highlight_hierarchy.png",width=10.5,height=10,dpi=500)
+ggsave(plot = p3, "/n/scratch/users/c/cao385/Ependymoma/dj83/New/ZFTA-Cluster 2_highlight_hierarchy.pdf",width=10.5,height=10,dpi=500)
 
 p4 <- ggplot(df %>% arrange(ZFTA_Cluster3))+
   geom_point(aes(x=set_x, y=set_y,color=ZFTA_Cluster3),size=1)+
@@ -226,7 +220,7 @@ p4 <- ggplot(df %>% arrange(ZFTA_Cluster3))+
   theme(legend.text=element_text(family="Helvetica"))+
   theme(legend.title=element_blank())+
   theme(legend.direction="horizontal",legend.position="bottom")
-ggsave(plot = p4, "/n/scratch/users/c/cao385/Ependymoma/dj83/New/ZFTA-Cluster 3_highlight_hierarchy.png", width = 10.5, height = 10, dpi = 500)
+ggsave(plot = p4, "/n/scratch/users/c/cao385/Ependymoma/dj83/New/ZFTA-Cluster 3_highlight_hierarchy.pdf", width = 10.5, height = 10, dpi = 500)
 
 p5 <- ggplot(df %>% arrange(ZFTA_Cluster4))+
   geom_point(aes(x=set_x, y=set_y,color=ZFTA_Cluster4),size=1)+
@@ -240,7 +234,7 @@ p5 <- ggplot(df %>% arrange(ZFTA_Cluster4))+
   theme(legend.text=element_text(family="Helvetica"))+
   theme(legend.title=element_blank())+
   theme(legend.direction="horizontal",legend.position="bottom")
-ggsave(plot = p5, "/n/scratch/users/c/cao385/Ependymoma/dj83/New/ZFTA-Cluster 4_highlight_hierarchy.png", width = 10.5, height = 10, dpi = 500)
+ggsave(plot = p5, "/n/scratch/users/c/cao385/Ependymoma/dj83/New/ZFTA-Cluster 4_highlight_hierarchy.pdf", width = 10.5, height = 10, dpi = 500)
 
 p6 <- ggplot(df %>% arrange(ST_YAP1))+
   geom_point(aes(x=set_x, y=set_y,color=ST_YAP1),size=1)+
@@ -254,8 +248,8 @@ p6 <- ggplot(df %>% arrange(ST_YAP1))+
   theme(legend.text=element_text(family="Helvetica"))+
   theme(legend.title=element_blank())+
   theme(legend.direction="horizontal",legend.position="bottom")
-ggsave(plot = p6, "/n/scratch/users/c/cao385/Ependymoma/dj83/New/ST-YAP1_highlight_hierarchy.png", width = 10.5, height = 10, dpi = 500)
+ggsave(plot = p6, "/n/scratch/users/c/cao385/Ependymoma/dj83/New/ST-YAP1_highlight_hierarchy.pdf", width = 10.5, height = 10, dpi = 500)
 
 
 wrap_plots(p1, p2, p3, p4, p5, p6)
-ggsave("/n/scratch/users/c/cao385/Ependymoma/dj83/New/ST_hierarchy.png", width = 15, height = 10, dpi = 500)
+ggsave("/n/scratch/users/c/cao385/Ependymoma/dj83/New/ST_hierarchy.pdf", width = 15, height = 10, dpi = 500)

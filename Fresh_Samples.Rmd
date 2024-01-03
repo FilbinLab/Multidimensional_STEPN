@@ -671,3 +671,61 @@ saveRDS(data, file.path(base_dir, 'analysis/seurat_obj_malignant.rds'))
 
 DimPlot(data, group.by = 'sample', split.by = 'sample', reduction = 'tsne.harmony')
 ```
+
+
+``` {r}
+data <- readRDS(file.path(base_dir, 'analysis/seurat_obj_malignant.rds'))
+
+cm_norm <- as.matrix(log2(LayerData(data, 'counts')/10+1))
+cm_mean <- log2(Matrix::rowMeans(LayerData(data, 'counts'))+1)
+cm_center <- cm_norm - rowMeans(cm_norm)
+
+nmf_score <- t(scoreNmfGenes(cm_center, cm_mean, pb_degs, verbose = F))
+
+nmf_score_final_t <- data.frame(nmf_score)
+nmf_score_final_t <- metagene_score_signature(nmf_score_final_t, 6, 1)
+data <- AddMetaData(data, nmf_score_final_t)
+
+DimPlot(data, group.by = 'signature_1', cols = clusterExperiment::bigPalette, reduction = 'tsne.harmony') + seurat_theme()
+
+
+
+nmf_score <- nmf_score_final_t %>% 
+  dplyr::select(gsub('-| ', '\\.', names(pb_degs)))
+
+set.seed(123456)
+tsne <- Rtsne(nmf_score, max_iter = 1000, perplexity = 100, verbose = T)$Y
+
+rownames(tsne) <- rownames(Embeddings(data, "tsne.harmony"))
+colnames(tsne) <- c('tSNE_1', 'tSNE_2')
+data@reductions$tsne_score <- data@reductions$tsne.harmony
+data@reductions$tsne_score@cell.embeddings <- as.matrix(tsne[Cells(data), ])
+data@reductions$tsne_score@key <- "tSNE_"
+
+data$Metaprogram<- factor(data$Metaprogram, levels = NMF_order)
+
+p1 <- DimPlot(data,group.by="signature_1",reduction="tsne_score",cols=clusterExperiment::bigPalette,pt.size=1)
+p2 <- DimPlot(data,group.by="sample",reduction="tsne_score",pt.size=1)
+p1+p2
+
+
+plotProportion(data$sample, data$signature_1,
+               unique(data$sample), 
+               unique(data$signature_1),
+               c("Sample", "Annotation", "Proportion"),
+               "Sample", "Proportion", "Annotation", 
+               clusterExperiment::bigPalette,
+               y_title = "Proportion", 
+               x_text_size = 12, y_text_size = 12, axis_title_size = 14, legend_title_size = 14, legend_text_size = 12)
+
+plotProportion(x = data$signature_1, y = data$sample, 
+               x_order = unique(data$signature_1), 
+               y_order = unique(data$sample), 
+               col_names = c("Annotation", "Sample", "Proportion"),
+               x_var = "Annotation", y_var = "Proportion", fill_var = "Sample", 
+               colors = paletteer::paletteer_c("scico::roma", n = length(unique(data$sample))),
+               y_title = "Proportion", 
+               x_text_size = 12, y_text_size = 12, axis_title_size = 14, legend_title_size = 14, legend_text_size = 12)
+
+qsave(data, '/n/scratch/users/c/cao385/Ependymoma/dj83/New/seurat_fresh_annotated.qs')
+```

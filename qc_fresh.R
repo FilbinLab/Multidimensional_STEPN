@@ -384,39 +384,45 @@ ggsave("percentage_cells_pass_qc.pdf", path = analysis_dir, width = 8, height = 
 
 
 
-
-
+library(Seurat)
+library(qs)
+library(stringr)
 
 source('~/Projects/General-Codes/Resources/single_cell_preprocessing_helper_functions.R')
 source('~/Projects/General-Codes/Resources/NMF_helper_function.R')
 source('~/Projects/General-Codes/Resources/Plotting_helper_functions.R')
 
+base_dir <- '/n/scratch/users/c/cao385/Ependymoma/dj83'
+analysis_dir <- file.path(base_dir, "analysis/ZFTA_fresh/qc")
+
 cm_list <- readRDS(file.path(analysis_dir, "cm_list.rds"))
 samples <- readRDS(file.path(analysis_dir, "samples.rds"))
 
-data <- RunFullSeurat_v5(cm = cm_list$raw_data, metadata = samples, doBatch = T, var2batch = 'sample', batchMethod = 'harmony', dims = 0.8, project = 'EPN_Fresh', norm.type = 'RNA', verbose = T)
-qsave(data, '/n/scratch/users/c/cao385/Ependymoma/dj83/New/seurat_fresh.qs')
+#data <- RunFullSeurat_v5(cm = cm_list$raw_data, metadata = samples, doBatch = T, var2batch = 'sample', batchMethod = 'harmony', dims = 0.8, project = 'EPN_Fresh', norm.type = 'RNA', verbose = T)
+#qsave(data, '/n/scratch/users/c/cao385/Ependymoma/dj83/New/seurat_fresh.qs')
+#DimPlot(data, group.by = 'sample', cols = clusterExperiment::bigPalette, reduction = 'tsne.unintegrated')
+#DimPlot(data, group.by = 'sample', cols = clusterExperiment::bigPalette, reduction = 'tsne.harmony') + seurat_theme()
+#markers_frozen <- qread('/n/scratch/users/c/cao385/Ependymoma/dj83/data/ZFTA_frozen/gene_signatures/ZFTA_frozen_DE_list_signature1_mergedNPCs_top200.qs')
 
-DimPlot(data, group.by = 'sample', cols = clusterExperiment::bigPalette, reduction = 'tsne.unintegrated')
-DimPlot(data, group.by = 'sample', cols = clusterExperiment::bigPalette, reduction = 'tsne.harmony') + seurat_theme()
+data <- readRDS('/n/scratch/users/c/cao385/Ependymoma/seurat_obj_frozen_NPC_merged_clean.rds')
+Idents(data) <- data$Metaprogram
+pb_degs <- FindAllMarkers(data, logfc.threshold = 1, only.pos = T) %>% filter(p_val_adj < 0.05)
+pb_degs <- pb_degs[!str_detect(pb_degs$gene, "RP11"), ]
+pb_degs <- pb_degs %>% group_by(cluster) %>% arrange(-avg_log2FC, .by_group = T) %>% top_n(50, wt = avg_log2FC)
+pb_degs <- lapply(split(pb_degs, f = pb_degs$cluster), function(x) x$gene)
 
 
-markers_frozen <- qread('/n/scratch/users/c/cao385/Ependymoma/dj83/data/ZFTA_frozen/gene_signatures/ZFTA_frozen_DE_list_signature1_mergedNPCs_top200.qs')
-
-
-
+data <- qread('/n/scratch/users/c/cao385/Ependymoma/dj83/New/seurat_fresh.qs')
 
 ## Normalize and center cm (still only keep malignant cells and all genes that pass the filter)
 cm_norm <- as.matrix(log2(cm_list$raw_data/10+1))
 cm_mean <- log2(Matrix::rowMeans(cm_list$raw_data)+1)
 cm_center <- cm_norm - rowMeans(cm_norm)
 
-nmf_score <- t(scoreNmfGenes(cm_center, cm_mean, markers_frozen, verbose = F))
+nmf_score <- t(scoreNmfGenes(cm_center, cm_mean, pb_degs, verbose = F))
 
 nmf_score_final_t <- data.frame(nmf_score)
-for (i in 1:3){
-  nmf_score_final_t <- metagene_score_signature(nmf_score_final_t, 6, i)
-}
+nmf_score_final_t <- metagene_score_signature(nmf_score_final_t, 6, 1)
 data <- AddMetaData(data, nmf_score_final_t)
 
 DimPlot(data, group.by = 'signature_1', cols = clusterExperiment::bigPalette, reduction = 'tsne.harmony') + seurat_theme()
@@ -439,3 +445,5 @@ plotProportion(x = data$signature_1, y = data$sample,
                colors = paletteer::paletteer_c("scico::roma", n = length(unique(data$sample))),
                y_title = "Proportion", 
                x_text_size = 12, y_text_size = 12, axis_title_size = 14, legend_title_size = 14, legend_text_size = 12)
+
+qsave(data, '/n/scratch/users/c/cao385/Ependymoma/dj83/New/seurat_fresh_annotated.qs')
