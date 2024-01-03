@@ -8,7 +8,7 @@ library(readxl)
 library(dplyr)
 
 # Organize environment  -----------------------------------
-base_dir <- file.path('/n/scratch/users/s/sad167/EPN/Ependymoma2023/Xenium/resources')
+base_dir <- file.path('/n/scratch/users/s/sad167/EPN/Xenium')
 
 analysis_dir  <- file.path(base_dir, 'analysis/20231020__200939__BT2126_BT1745')
 
@@ -18,7 +18,7 @@ if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
 data_dir <- file.path(analysis_dir, 'data')
 if (!dir.exists(data_dir)){dir.create(data_dir, recursive = T)}
 
-resource_dir  <- file.path(base_dir, 'scripts/resources')
+resource_dir  <- file.path('/n/scratch/users/s/sad167/EPN/Ependymoma2023/Xenium/resources')
 source(file.path(resource_dir, 'Plotting_functions.R'))
 
 ## Create directories to store individual outputs
