@@ -8,9 +8,9 @@ library(readxl)
 library(dplyr)
 
 # Organize environment  -----------------------------------
-base_dir <- file.path('/n/scratch/users/s/sad167/EPN/Xenium')
+base_dir <- file.path('/n/scratch/users/s/sad167/EPN/Ependymoma2023/Xenium/resources')
 
-analysis_dir  <- file.path(base_dir, 'analysis/20231107__203958__BT1717_BT775')
+analysis_dir  <- file.path(base_dir, 'analysis/20231020__200939__BT2126_BT1745')
 
 plot_dir <- file.path(analysis_dir, 'plots')
 if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
@@ -24,13 +24,12 @@ source(file.path(resource_dir, 'Plotting_functions.R'))
 ## Create directories to store individual outputs
 if (!dir.exists(file.path(plot_dir, 'individual'))){dir.create(file.path(plot_dir, 'individual'), recursive = T)}
 
-samples <- c('0010501-Region_1', '0010501-Region_2', 
-             # these regions were excluded as they contained too many clusters even at low resolutions
-             # '0010814-Region_1', '0010814-Region_2', 
-             '0010814-Region_5', '0010814-Region_6')
-names(samples) <- c('0010501-Region_1', '0010501-Region_2', 
-                   # '0010814-Region_1', '0010814-Region_2',
-                    '0010814-Region_5', '0010814-Region_6')
+samples <- c('0010652-Region_1', '0010652-Region_2', '0010652-Region_3', '0010652-Region_4', 
+             '0010652-Region_5', '0010652-Region_6', '0010652-Region_7', '0010652-Region_8', 
+             '0010652-Region_9', '0010652-Region_10')
+names(samples) <- c('0010652-Region_1', '0010652-Region_2', '0010652-Region_3', '0010652-Region_4', 
+                    '0010652-Region_5', '0010652-Region_6', '0010652-Region_7', '0010652-Region_8',
+                    '0010652-Region_9', '0010652-Region_10')
 
 for (i in seq_along(samples)) {
   if (!dir.exists(file.path(plot_dir, paste0('individual/', names(samples)[i])))){dir.create(file.path(plot_dir, paste0('individual/', names(samples)[i])), recursive = T)}
@@ -83,75 +82,98 @@ saveRDS(gene_list, file.path(data_dir, 'Xenium_tumor_gene_list.rds'))
 
 
 # Define resolution to use and annotations for each tissue  -------------------------------------
-resolutions_to_use <- c('SCT_snn_res.0.3', 'SCT_snn_res.0.3', 
-                        'SCT_snn_res.0.1', 'SCT_snn_res.0.1',
-                        'SCT_snn_res.0.7', 'SCT_snn_res.0.8')
+resolutions_to_use <- c('SCT_snn_res.0.2', 'SCT_snn_res.0.2', 'SCT_snn_res.0.2', 'SCT_snn_res.0.2', 
+                        'SCT_snn_res.0.2', 'SCT_snn_res.0.2',  'SCT_snn_res.0.3',  'SCT_snn_res.0.3',
+                        'SCT_snn_res.0.3', 'SCT_snn_res.0.3')
 
 annotation_clusters <- list (
-  '0010501-Region_1' = c('0' = 'Ependymal-like',
-                         '1' = 'NPC-like',
-                         '2' = 'Mesenchymal',
-                         '3' = 'Immune',
-                         '4' = 'Neuroepithelial-like',
-                         '5' = 'NPC-like',
-                         '6' = 'Endothelial',
-                         '7' = 'NPC-like',
-                         '8' = 'NPC-like',
-                         '9' = 'Immune'),
-  '0010501-Region_2' = c('0' = 'Ependymal-like',
-                         '1' = 'Neuroepithelial-like',
-                         '2' = 'Mesenchymal',
-                         '3' = 'NPC-like',
-                         '4' = 'Immune',
-                         '5' = 'Endothelial',
-                         '6' = 'Immune',
-                         '7' = 'NPC-like',
-                         '8' = 'Ependymal-like',
-                         '9' = 'NPC-like',
-                         '10' = 'Ependymal-like'),
-  '0010814-Region_1' = c('0' = 'Ependymal-like',
-                         '1' = 'Immune',
-                         '2' = 'NPC-like',
-                         '3' = 'Tumor-c24',
-                         '4' = 'Immune',
-                         '5' = 'Neuroepithelial-like',
-                         '6' = 'Ependymal-like',
-                         '7' = 'Mesenchymal' ),
-# to fix
-'0010814-Region_2' = c('0' = 'Neuroepithelial-like',
-                         '1' = 'Immune',
-                         '2' = 'NPC-like',
-                         '3' = 'Neuroepithelial-like',
-                         '4' = 'Immune',
-                         '5' = 'Mesenchymal',
-                         '6' = 'Ependymal-like',
-                         '7' = 'Mesenchymal',
-                         '8' = 'Neuroepithelial-like'),
-# to fix
-'0010814-Region_5' = c('0' = 'Neuroepithelial-like',
-                         '1' = 'NPC-like',
-                         '2' = 'Ependymal-like',
-                         '3' = 'Endothelial',
-                         '4' = 'VLMCs',
-                         '5' = 'Neuroepithelial-like',
-                         '6' = 'Immune',
-                         '7' = 'Neuroepithelial-like',
-                         '8' = 'Neuroepithelial-like',
-                         '9' = 'Neuroepithelial-like',
-                         '10' = 'NPC-like'),
-  '0010814-Region_6' = c('0' = 'Neuroepithelial-like',
+  '0010652-Region_1' = c('0' = 'NPC-like',
                          '1' = 'Ependymal-like',
-                         '2' = 'NPC-like',
-                         '3' = 'Ependymal-like',
+                         '2' = 'Immune',
+                         '3' = 'Endothelial', 
                          '4' = 'NPC-like',
-                         '5' = 'Endothelial',
+                         '5' = 'Immune'),
+  '0010652-Region_2' = c('0' = 'NPC-like',
+                         '1' = 'Ependymal-like',
+                         '2' = 'Immune',
+                         '3' = 'Neurons', 
+                         '4' = 'Neuroepithelial-like',
+                         '5' = 'Immune',
                          '6' = 'NPC-like',
-                         '7' = 'Neuroepithelial-like',
-                         '8' = 'Neuroepithelial-like',
-                         '9' = 'Immune',
-                         '10' = 'NPC-like',
-                         '11' = 'Neuroepithelial-like',
-                         '12' = 'Neurons')
+                         '7' = 'Immune'),
+  '0010652-Region_3' = c('0' = 'Ependymal-like',
+                         '1' = 'NPC-like',
+                         '2' = 'Endothelial',
+                         '3' = 'Immune', 
+                         '4' = 'Neuroepithelial-like',
+                         '5' = 'Neuroepithelial-like',
+                         '6' = 'Immune'),
+  '0010652-Region_4' = c('0' = 'Neuroepithelial-like',
+                         '1' = 'NPC-like',
+                         '2' = 'Immune',
+                         '3' = 'NPC-like', 
+                         '4' = 'Endothelial',
+                         '5' = 'Ependymal-like',
+                         '6' = 'Neuroepithelial-like',
+                         '7' = 'Endothelial', 
+                         '8' = 'NPC-like', 
+                         '9' = 'Ependymal-like', 
+                         '10' = 'Immune'),
+  '0010652-Region_5' = c('0' = 'Neuroepithelial-like',
+                         '1' = 'NPC-like',
+                         '2' = 'Neuroepithelial-like',
+                         '3' = 'Ependymal-like', 
+                         '4' = 'Immune',
+                         '5' = 'Endothelial',
+                         '6' = 'Neuroepithelial-like',
+                         '7' = 'NPC-like', 
+                         '8' = 'NPC-like'),
+  '0010652-Region_6' = c('0' = 'Ependymal-like',
+                         '1' = 'Neuroepithelial-like',
+                         '2' = 'Immune',
+                         '3' = 'Neurons', 
+                         '4' = 'VLMCs',
+                         '5' = 'Ependymal-like',
+                         '6' = 'VLMCs',
+                         '7' = 'VLMCs'),
+  '0010652-Region_7' = c('0' = 'Ependymal-like',
+                         '1' = 'Neuroepithelial-like',
+                         '2' = 'NPC-like',
+                         '3' = 'Immune', 
+                         '4' = 'Endothelial',
+                         '5' = 'NPC-like',
+                         '6' = 'Neuroepithelial-like',
+                         '7' = 'Neuroepithelial-like', 
+                         '8' = 'Immune', 
+                         '9' = 'NPC-like',
+                         '10' = 'NPC-like'),
+  '0010652-Region_8' = c('0' = 'VLMCs',
+                         '1' = 'NPC-like',
+                         '2' = 'NPC-like',
+                         '3' = 'Immune', 
+                         '4' = 'Ependymal-like',
+                         '5' = 'Microglia',
+                         '6' = 'Ependymal-like',
+                         '7' = 'NPC-like'),
+  '0010652-Region_9' = c('0' = 'Ependymal-like',
+                         '1' = 'Neuroepithelial-like',
+                         '2' = 'Neurons',
+                         '3' = 'Immune', 
+                         '4' = 'Ependymal-like',
+                         '5' = 'Neuroepithelial-like',
+                         '6' = 'VLMCs',
+                         '7' = 'Ependymal-like',
+                         '8' = 'VLMCs',
+                         '9' = 'Neurons',
+                         '10' = 'Neuroepithelial-like',
+                         '11' = 'Immune',
+                         '12' = 'Neuroepithelial-like'),
+  '0010652-Region_10' = c('0' = 'Ependymal-like',
+                         '1' = 'Ependymal-like',
+                         '2' = 'Endothelial',
+                         '3' = 'Immune', 
+                         '4' = 'Neuroepithelial-like',
+                         '5' = 'NPC-like')
 )
 
 
@@ -161,7 +183,7 @@ annotation_clusters <- list (
 
 # Read data
 for (i in seq_along(samples)) {
-  data <- qread(file.path(base_dir, paste0('data/processed_data_Carlos/20231107__203958__BT1717_BT775/', names(samples)[i], '/', names(samples)[i], '.qs')))
+  data <- qread(file.path(base_dir, paste0('data/processed_data_Carlos/20231020__200939__BT2126_BT1745/', names(samples)[i], '/', names(samples)[i], '.qs')))
   
   #DotPlot markers for different resolutions
   nres <- c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1)
@@ -172,7 +194,7 @@ for (i in seq_along(samples)) {
       theme(axis.text.x = element_text(angle = 45, hjust = 1), axis.text=element_text(size = 6))
     ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/0_DotPlot_res', res ,'.pdf')), width=16, height=5)
   }
-  
+
   # Change name identities
   Idents(data) <- resolutions_to_use[i]
   data <- RenameIdents(data, annotation_clusters[[i]])
