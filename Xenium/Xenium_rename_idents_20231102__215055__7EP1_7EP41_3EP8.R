@@ -131,10 +131,10 @@ annotation_clusters <- list (
                          '2' = 'Ependymal-like',
                          '3' = 'Neuroepithelial-like', 
                          '4' = 'Immune',
-                         '5' = 'VLMCs',
-                         '6' = 'VLMCs',
+                         '5' = 'Neurons',
+                         '6' = 'Neurons',
                          '7' = 'Immune', 
-                         '8' = 'VLMCs', 
+                         '8' = 'Neurons', 
                          '9' = 'Ependymal-like', 
                          '10' = 'NPC-like', 
                          '11' = 'Immune', 
@@ -145,20 +145,20 @@ annotation_clusters <- list (
                          '2' = 'NPC-like',
                          '3' = 'Immune', 
                          '4' = 'Neuroepithelial-like',
-                         '5' = 'VLMCs',
-                         '6' = 'VLMCs',
-                         '7' = 'VLMCs', 
+                         '5' = 'Neurons',
+                         '6' = 'Neurons',
+                         '7' = 'Neurons', 
                          '8' = 'Ependymal-like', 
                          '9' = 'NPC-like',
                          '10' = 'NPC-like'),
   '0010619-Region_3' = c('0' = 'Ependymal-like',
                          '1' = 'NPC-like',
                          '2' = 'Ependymal-like',
-                         '3' = 'VLMCs', 
+                         '3' = 'Neurons', 
                          '4' = 'Ependymal-like',
                          '5' = 'Immune',
                          '6' = 'Neuroepithelial-like',
-                         '7' = 'VLMCs', 
+                         '7' = 'Neurons', 
                          '8' = 'NPC-like', 
                          '9' = 'Radial glia-like',
                          '10' = 'NPC-like'),
@@ -228,10 +228,12 @@ for (i in seq_along(samples)) {
   
   # Export metadata with cell names and new annotation
   cell_id <- data.frame(rownames(data@meta.data), data@meta.data$group)
-  rownames(cell_id) <- cell_id$rownames.data.meta.data.
-  cell_id$rownames.data.meta.data. <- NULL
-  write_csv(cell_id, file.path(data_dir, paste0('individual/', names(samples)[i], '/cell_id.csv')))
-  write_csv(data@meta.data, file.path(data_dir, paste0('individual/metadata_', names(samples)[i], '.csv')))
+  # rename column names
+  colnames(cell_id)[colnames(cell_id) == "rownames.data.meta.data."] <- "cell_ID"
+  colnames(cell_id)[colnames(cell_id) == "data.meta.data.group"] <- "Metaprogram"
+  # save
+  write_csv(cell_id, file.path(data_dir, paste0('individual/cell_ID_', names(samples)[i], '.csv')))
+  
   
   
   # Visualize  distribution clusters 

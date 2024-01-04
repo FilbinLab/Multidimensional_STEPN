@@ -164,10 +164,11 @@ for (i in seq_along(samples)) {
   
   # Export metadata with cell names and new annotation
   cell_id <- data.frame(rownames(data@meta.data), data@meta.data$group)
-  rownames(cell_id) <- cell_id$rownames.data.meta.data.
-  cell_id$rownames.data.meta.data. <- NULL
-  write_csv(cell_id, file.path(data_dir, paste0('individual/', names(samples)[i], '/cell_id.csv')))
-  write_csv(data@meta.data, file.path(data_dir, paste0('individual/metadata_', names(samples)[i], '.csv')))
+  # rename column names
+  colnames(cell_id)[colnames(cell_id) == "rownames.data.meta.data."] <- "cell_ID"
+  colnames(cell_id)[colnames(cell_id) == "data.meta.data.group"] <- "Metaprogram"
+  # save
+  write_csv(cell_id, file.path(data_dir, paste0('individual/cell_ID_', names(samples)[i], '.csv')))
   
   
   # Visualize  distribution clusters 
