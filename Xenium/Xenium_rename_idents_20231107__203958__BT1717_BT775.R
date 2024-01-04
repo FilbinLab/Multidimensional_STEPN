@@ -25,11 +25,10 @@ source(file.path(resource_dir, 'Plotting_functions.R'))
 if (!dir.exists(file.path(plot_dir, 'individual'))){dir.create(file.path(plot_dir, 'individual'), recursive = T)}
 
 samples <- c('0010501-Region_1', '0010501-Region_2', 
-             # these regions were excluded as they contained too many clusters even at low resolutions
-             # '0010814-Region_1', '0010814-Region_2', 
+              '0010814-Region_1', '0010814-Region_2', 
              '0010814-Region_5', '0010814-Region_6')
 names(samples) <- c('0010501-Region_1', '0010501-Region_2', 
-                   # '0010814-Region_1', '0010814-Region_2',
+                    '0010814-Region_1', '0010814-Region_2',
                     '0010814-Region_5', '0010814-Region_6')
 
 for (i in seq_along(samples)) {
@@ -112,22 +111,20 @@ annotation_clusters <- list (
   '0010814-Region_1' = c('0' = 'Ependymal-like',
                          '1' = 'Immune',
                          '2' = 'NPC-like',
-                         '3' = 'Tumor-c24',
+                         '3' = 'NPC-like',
                          '4' = 'Immune',
                          '5' = 'Neuroepithelial-like',
                          '6' = 'Ependymal-like',
                          '7' = 'Mesenchymal' ),
-# to fix
 '0010814-Region_2' = c('0' = 'Neuroepithelial-like',
                          '1' = 'Immune',
-                         '2' = 'NPC-like',
-                         '3' = 'Neuroepithelial-like',
+                         '2' = 'Neurons',
+                         '3' = 'NPC-like',
                          '4' = 'Immune',
                          '5' = 'Mesenchymal',
                          '6' = 'Ependymal-like',
                          '7' = 'Mesenchymal',
-                         '8' = 'Neuroepithelial-like'),
-# to fix
+                         '8' = 'NPC-like'),
 '0010814-Region_5' = c('0' = 'Neuroepithelial-like',
                          '1' = 'NPC-like',
                          '2' = 'Ependymal-like',
