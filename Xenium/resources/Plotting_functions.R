@@ -1,9 +1,9 @@
 # Color palettes -------------------------------------
 colors_groups <- c("gray30","#F99E93FF","#9E5E9BFF","#74ADD1FF","#ACD39EFF","#96410EFF", 'grey80',
-                   '#b81702', '#370617',  '#ffba08', '#2fb5c7',  '#ff0072')
+                   '#b81702', '#370617',  '#ffba08', '#002855',  '#bc1f66', '#ff6000')
 names(colors_groups) <- c("Cycling", "Neuroepithelial-like", "Radial glia-like", 
                           "NPC-like" ,"Ependymal-like", "Mesenchymal", "Unassigned", 
-                          "Immune", "Microglia", "Endothelial", "Neurons", "VLMCs")
+                          "Immune", "Microglia", "Endothelial", "Neurons", "VLMCs", "Oligodendrocytes")
 
 col_niches <- c('#58148e', '#15a2a2', '#ea515f','#d0a03b','#0466c8')
 

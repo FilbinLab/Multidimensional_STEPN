@@ -6,6 +6,7 @@ library(qs)
 library(data.table)
 library(readxl)
 library(dplyr)
+library(ggrastr)
 
 # Organize environment  -----------------------------------
 base_dir <- file.path('/n/scratch/users/s/sad167/EPN/Xenium')
@@ -215,8 +216,9 @@ for (i in seq_along(samples)) {
   data[["group"]] <- Idents(data)
   
   # Add information about malignant or non-malignant
+  # Add information about malignant or non-malignant
   data$malignant <- ifelse(data$group %in% c('NPC-like', 'Ependymal-like', 'Neuroepithelial-like',
-                                             'Mesenchymal'), "Malignant", "Non-malignant")
+                                             'Mesenchymal', 'Radia glia-like'), "Malignant", "Non-malignant")
   
   # DotPlot markers
   DotPlot(data, 
@@ -229,41 +231,43 @@ for (i in seq_along(samples)) {
   # Export metadata with cell names and new annotation
   cell_id <- data.frame(rownames(data@meta.data), data@meta.data$group)
   # rename column names
-  colnames(cell_id)[colnames(cell_id) == "rownames.data.meta.data."] <- "cell_ID"
-  colnames(cell_id)[colnames(cell_id) == "data.meta.data.group"] <- "Metaprogram"
+  colnames(cell_id)[colnames(cell_id) == "rownames.data.meta.data."] <- "cell_id"
+  colnames(cell_id)[colnames(cell_id) == "data.meta.data.group"] <- "group"
   # save
   write_csv(cell_id, file.path(data_dir, paste0('individual/cell_ID_', names(samples)[i], '.csv')))
   
   
   
   # Visualize  distribution clusters 
-  ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.4, 
-               dark.background = F) + ggtitle(names(samples)[i])
-  ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/2_ImageDimPlot.pdf')), width=8, height=5)
+  plot <- ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.3, 
+                       dark.background = F) + ggtitle(names(samples)[i]) + NoLegend()
+  rasterize(plot, layers='Point', dpi=800)
+  ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/2_ImageDimPlot.pdf')), width=6, height=5)
   
-  ImageDimPlot(data, group.by = 'malignant', cols = col_normal_malignant, border.size = NA, size = 0.4, 
-               dark.background = F) + ggtitle(names(samples)[i])
+  plot <- ImageDimPlot(data, group.by = 'malignant', cols = col_normal_malignant, border.size = NA, size = 0.4, 
+                       dark.background = F) + ggtitle(names(samples)[i])
+  rasterize(plot, layers='Point', dpi=800)
   ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/3_ImageDimPlot_malignant.pdf')), width=8, height=5)
-
-
-  # Perform niche analysis
-  data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
   
-  # Plot niche images
-  celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4, 
-                                dark.background = F) + ggtitle("Cell type")
-  niche.plot <- ImageDimPlot(data, group.by = "niches", fov = "fov",  cols = col_niches, border.size = NA, size = 0.4, 
-                             dark.background = F) + ggtitle("Niches") 
-  celltype.plot | niche.plot
-  ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/4_ImageDimPlot_niche.pdf')), width=16, height=5)
-  
-  # Save data table with frequency
-  niche_freq <- as.data.frame(t(table(data$group, data$niches)))
-  write_csv(niche_freq, file.path(data_dir, paste0('individual/', names(samples)[i], '/3_0010540-Region_1_niche_cell_number.csv')))
-  
-  # Plot niche frequency
-  plot_bar(data, data$niches, data$group, colors_groups) 
-  ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/5_BarPlot_niches.pdf')), width=6, height=5)
+# 
+#   # Perform niche analysis
+#   data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
+#   
+#   # Plot niche images
+#   celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4, 
+#                                 dark.background = F) + ggtitle("Cell type")
+#   niche.plot <- ImageDimPlot(data, group.by = "niches", fov = "fov",  cols = col_niches, border.size = NA, size = 0.4, 
+#                              dark.background = F) + ggtitle("Niches") 
+#   celltype.plot | niche.plot
+#   ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/4_ImageDimPlot_niche.pdf')), width=16, height=5)
+#   
+#   # Save data table with frequency
+#   niche_freq <- as.data.frame(t(table(data$group, data$niches)))
+#   write_csv(niche_freq, file.path(data_dir, paste0('individual/', names(samples)[i], '/3_0010540-Region_1_niche_cell_number.csv')))
+#   
+#   # Plot niche frequency
+#   plot_bar(data, data$niches, data$group, colors_groups) 
+#   ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/5_BarPlot_niches.pdf')), width=6, height=5)
   
 }
 
