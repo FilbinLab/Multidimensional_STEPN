@@ -1,9 +1,21 @@
+options(future.globals.maxSize = +Inf)
+
 # Color palettes -------------------------------------
 colors_groups <- c("gray30","#F99E93FF","#9E5E9BFF","#74ADD1FF","#ACD39EFF","#96410EFF", 'grey80',
-                   '#b81702', '#370617',  '#ffba08', '#2fb5c7',  '#ff0072')
+                   '#BDA14DFF', '#3EBCB6FF', '#0169C4FF', '#153460FF', '#D5114EFF' ,'#A56EB6FF' ,'#4B1C57FF')
+
 names(colors_groups) <- c("Cycling", "Neuroepithelial-like", "Radial glia-like", 
                           "NPC-like" ,"Ependymal-like", "Mesenchymal", "Unassigned", 
-                          "Immune", "Microglia", "Endothelial", "Neurons", "VLMCs")
+                          "T-cell", "Myeloid", "Microglia", "Endothelial", "Neurons", "VLMCs", "Oligodendrocytes")
+
+colors_groups_barplot <- c("gray30","#F99E93FF","#9E5E9BFF","#74ADD1FF","#ACD39EFF","#96410EFF", 'grey80',
+                           '#BDA14DFF', '#3EBCB6FF', '#0169C4FF', '#153460FF', '#D5114EFF' ,'#A56EB6FF' ,'#4B1C57FF', 
+                   'grey80','grey80','grey80','grey80','grey80','grey80','grey80')
+names(colors_groups_barplot) <- c("Cycling", "Neuroepithelial-like", "Radial glia-like", 
+                                  "NPC-like" ,"Ependymal-like", "Mesenchymal", "Unassigned", 
+                                  "T-cell", "Myeloid", "Microglia", "Endothelial", "Neurons", "VLMCs", "Oligodendrocytes",
+                          '12', '13', '9', '10', '11', '14', '15')
+
 
 col_niches <- c('#58148e', '#15a2a2', '#ea515f','#d0a03b','#0466c8')
 

@@ -6,6 +6,7 @@ library(qs)
 library(data.table)
 library(readxl)
 library(dplyr)
+library(ggrastr)
 
 # Organize environment  -----------------------------------
 base_dir <- file.path('/n/scratch/users/s/sad167/EPN/Xenium')
@@ -17,6 +18,9 @@ if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
 
 data_dir <- file.path(analysis_dir, 'data')
 if (!dir.exists(data_dir)){dir.create(data_dir, recursive = T)}
+
+seurat_obj_dir <- file.path(analysis_dir, 'data/seurat_objects')
+if (!dir.exists(seurat_obj_dir)){dir.create(seurat_obj_dir, recursive = T)}
 
 resource_dir  <- file.path('/n/scratch/users/s/sad167/EPN/Ependymoma2023/Xenium/resources')
 source(file.path(resource_dir, 'Plotting_functions.R'))
@@ -82,8 +86,8 @@ saveRDS(gene_list, file.path(data_dir, 'Xenium_tumor_gene_list.rds'))
 
 
 # Define resolution to use and annotations for each tissue  -------------------------------------
-resolutions_to_use <- c('SCT_snn_res.0.5', 'SCT_snn_res.0.5', 'SCT_snn_res.0.5', 'SCT_snn_res.0.5',
-                        'SCT_snn_res.0.5', 'SCT_snn_res.0.5', 'SCT_snn_res.0.5', 'SCT_snn_res.0.7')
+resolutions_to_use <- c('SCT_snn_res.0.5', 'SCT_snn_res.0.5', 'SCT_snn_res.0.5', 
+                        'SCT_snn_res.0.5', 'SCT_snn_res.0.5', 'SCT_snn_res.0.5', 'SCT_snn_res.0.5', 'SCT_snn_res.0.7')
 
 annotation_clusters <- list (
   '0010575-Region_1' = c('0' = 'Ependymal-like',
@@ -92,89 +96,89 @@ annotation_clusters <- list (
                          '3' = 'Neuroepithelial-like', 
                          '4' = 'Mesenchymal',
                          '5' = 'Endothelial',
-                         '6' = 'Immune',
+                         '6' = 'Myeloid',
                          '7' = 'NPC-like', 
                          '8' = 'NPC-like', 
-                         '9' = 'Immune', 
-                         '10' = 'Immune', 
-                         '11' = 'Immune', 
+                         '9' = 'Myeloid', 
+                         '10' = 'T-cell', 
+                         '11' = 'Myeloid', 
                          '12' = 'NPC-like'),
   '0010575-Region_2' = c('0' = 'Ependymal-like',
                          '1' = 'NPC-like',
                          '2' = 'Ependymal-like',
                          '3' = 'Neuroepithelial-like', 
                          '4' = 'Mesenchymal',
-                         '5' = 'Immune',
+                         '5' = 'Myeloid',
                          '6' = 'Endothelial',
                          '7' = 'NPC-like', 
                          '8' = 'NPC-like', 
-                         '9' = 'Immune', 
-                         '10' = 'Immune', 
-                         '11' = 'Immune', 
+                         '9' = 'Myeloid', 
+                         '10' = 'T-cell', 
+                         '11' = 'Myeloid', 
                          '12' = 'NPC-like'),
   '0010575-Region_3' = c('0' = 'Ependymal-like',
                          '1' = 'NPC-like',
                          '2' = 'Ependymal-like',
                          '3' = 'Mesenchymal', 
-                         '4' = 'Immune',
+                         '4' = 'Myeloid',
                          '5' = 'Ependymal-like',
                          '6' = 'Neuroepithelial-like',
                          '7' = 'Endothelial', 
                          '8' = 'NPC-like', 
                          '9' = 'NPC-like', 
-                         '10' = 'Immune', 
-                         '11' = 'Immune', 
-                         '12' = 'Immune',
+                         '10' = 'Myeloid', 
+                         '11' = 'T-cell', 
+                         '12' = 'Myeloid',
                          '13' = 'NPC-like'),
   '0010619-Region_1' = c('0' = 'Ependymal-like',
                          '1' = 'NPC-like',
                          '2' = 'Ependymal-like',
                          '3' = 'Neuroepithelial-like', 
-                         '4' = 'Immune',
-                         '5' = 'VLMCs',
-                         '6' = 'VLMCs',
-                         '7' = 'Immune', 
-                         '8' = 'VLMCs', 
+                         '4' = 'Myeloid',
+                         '5' = 'Neurons',
+                         '6' = 'Neurons',
+                         '7' = 'Myeloid', 
+                         '8' = 'Neurons', 
                          '9' = 'Ependymal-like', 
                          '10' = 'NPC-like', 
-                         '11' = 'Immune', 
-                         '12' = 'Immune',
+                         '11' = 'Myeloid', 
+                         '12' = 'Myeloid',
                          '13' = 'NPC-like'),
   '0010619-Region_2' = c('0' = 'Ependymal-like',
                          '1' = 'Ependymal-like',
                          '2' = 'NPC-like',
-                         '3' = 'Immune', 
+                         '3' = 'Myeloid', 
                          '4' = 'Neuroepithelial-like',
-                         '5' = 'VLMCs',
-                         '6' = 'VLMCs',
-                         '7' = 'VLMCs', 
+                         '5' = 'Neurons',
+                         '6' = 'Neurons',
+                         '7' = 'Neurons', 
                          '8' = 'Ependymal-like', 
                          '9' = 'NPC-like',
                          '10' = 'NPC-like'),
   '0010619-Region_3' = c('0' = 'Ependymal-like',
                          '1' = 'NPC-like',
                          '2' = 'Ependymal-like',
-                         '3' = 'VLMCs', 
+                         '3' = 'Neurons', 
                          '4' = 'Ependymal-like',
-                         '5' = 'Immune',
+                         '5' = 'Myeloid',
                          '6' = 'Neuroepithelial-like',
-                         '7' = 'VLMCs', 
+                         '7' = 'Neurons', 
                          '8' = 'NPC-like', 
                          '9' = 'Radial glia-like',
                          '10' = 'NPC-like'),
   '0010619-Region_4' = c('0' = 'Ependymal-like',
                          '1' = 'Endothelial',
                          '2' = 'NPC-like',
-                         '3' = 'Immune', 
+                         '3' = 'Myeloid', 
                          '4' = 'NPC-like',
                          '5' = 'Ependymal-like',
                          '6' = 'Ependymal-like',
                          '7' = 'VLMCs', 
-                         '8' = 'Immune', 
+                         '8' = 'T-cell', 
                          '9' = 'NPC-like',
                          '10' = 'NPC-like'),
   '0010619-Region_5' = c('0' = 'Ependymal-like',
-                         '1' = 'Immune',
+                         '1' = 'Myeloid',
                          '2' = 'Ependymal-like',
                          '3' = 'NPC-like', 
                          '4' = 'NPC-like',
@@ -183,8 +187,8 @@ annotation_clusters <- list (
                          '7' = 'Endothelial', 
                          '8' = 'NPC-like', 
                          '9' = 'Endothelial',
-                         '10' = 'Immune',
-                         '11' = 'Immune',
+                         '10' = 'T-cell',
+                         '11' = 'Myeloid',
                          '12' = 'NPC-like',
                          '13' = 'VLMCs',
                          '14' = 'Endothelial')
@@ -215,8 +219,9 @@ for (i in seq_along(samples)) {
   data[["group"]] <- Idents(data)
   
   # Add information about malignant or non-malignant
+  # Add information about malignant or non-malignant
   data$malignant <- ifelse(data$group %in% c('NPC-like', 'Ependymal-like', 'Neuroepithelial-like',
-                                             'Mesenchymal'), "Malignant", "Non-malignant")
+                                             'Mesenchymal', 'Radia glia-like'), "Malignant", "Non-malignant")
   
   # DotPlot markers
   DotPlot(data, 
@@ -228,40 +233,47 @@ for (i in seq_along(samples)) {
   
   # Export metadata with cell names and new annotation
   cell_id <- data.frame(rownames(data@meta.data), data@meta.data$group)
-  rownames(cell_id) <- cell_id$rownames.data.meta.data.
-  cell_id$rownames.data.meta.data. <- NULL
-  write_csv(cell_id, file.path(data_dir, paste0('individual/', names(samples)[i], '/cell_id.csv')))
-  write_csv(data@meta.data, file.path(data_dir, paste0('individual/metadata_', names(samples)[i], '.csv')))
+  # rename column names
+  colnames(cell_id)[colnames(cell_id) == "rownames.data.meta.data."] <- "cell_id"
+  colnames(cell_id)[colnames(cell_id) == "data.meta.data.group"] <- "group"
+  # save
+  write_csv(cell_id, file.path(data_dir, paste0('individual/cell_ID_', names(samples)[i], '.csv')))
+  
   
   
   # Visualize  distribution clusters 
-  ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.4, 
-               dark.background = F) + ggtitle(names(samples)[i])
-  ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/2_ImageDimPlot.pdf')), width=8, height=5)
+  plot <- ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.3, 
+                       dark.background = F) + ggtitle(names(samples)[i]) + NoLegend()
+  rasterize(plot, layers='Point', dpi=800)
+  ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/2_ImageDimPlot.pdf')), width=6, height=5)
   
-  ImageDimPlot(data, group.by = 'malignant', cols = col_normal_malignant, border.size = NA, size = 0.4, 
-               dark.background = F) + ggtitle(names(samples)[i])
+  plot <- ImageDimPlot(data, group.by = 'malignant', cols = col_normal_malignant, border.size = NA, size = 0.4, 
+                       dark.background = F) + ggtitle(names(samples)[i])
+  rasterize(plot, layers='Point', dpi=800)
   ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/3_ImageDimPlot_malignant.pdf')), width=8, height=5)
-
+  
 
   # Perform niche analysis
   data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
-  
+
   # Plot niche images
-  celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4, 
+  celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4,
                                 dark.background = F) + ggtitle("Cell type")
-  niche.plot <- ImageDimPlot(data, group.by = "niches", fov = "fov",  cols = col_niches, border.size = NA, size = 0.4, 
-                             dark.background = F) + ggtitle("Niches") 
+  niche.plot <- ImageDimPlot(data, group.by = "niches", fov = "fov",  cols = col_niches, border.size = NA, size = 0.4,
+                             dark.background = F) + ggtitle("Niches")
   celltype.plot | niche.plot
   ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/4_ImageDimPlot_niche.pdf')), width=16, height=5)
-  
+
   # Save data table with frequency
   niche_freq <- as.data.frame(t(table(data$group, data$niches)))
   write_csv(niche_freq, file.path(data_dir, paste0('individual/', names(samples)[i], '/3_0010540-Region_1_niche_cell_number.csv')))
-  
+
   # Plot niche frequency
-  plot_bar(data, data$niches, data$group, colors_groups) 
+  plot_bar(data, data$niches, data$group, colors_groups)
   ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/5_BarPlot_niches.pdf')), width=6, height=5)
+  
+  # save annotated object
+  qsave(data, file.path(seurat_obj_dir, paste0('Seurat_obj', names(samples)[i], '.qs')))
   
 }
 
