@@ -19,6 +19,9 @@ if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
 data_dir <- file.path(analysis_dir, 'data')
 if (!dir.exists(data_dir)){dir.create(data_dir, recursive = T)}
 
+seurat_obj_dir <- file.path(analysis_dir, 'data/seurat_objects')
+if (!dir.exists(seurat_obj_dir)){dir.create(seurat_obj_dir, recursive = T)}
+
 resource_dir  <- file.path('/n/scratch/users/s/sad167/EPN/Ependymoma2023/Xenium/resources')
 source(file.path(resource_dir, 'Plotting_functions.R'))
 
@@ -26,11 +29,9 @@ source(file.path(resource_dir, 'Plotting_functions.R'))
 if (!dir.exists(file.path(plot_dir, 'individual'))){dir.create(file.path(plot_dir, 'individual'), recursive = T)}
 
 samples <- c('0010501-Region_1', '0010501-Region_2', 
-              '0010814-Region_1', '0010814-Region_2', 
-             '0010814-Region_5', '0010814-Region_6')
+              '0010814-Region_1', '0010814-Region_2')
 names(samples) <- c('0010501-Region_1', '0010501-Region_2', 
-                    '0010814-Region_1', '0010814-Region_2',
-                    '0010814-Region_5', '0010814-Region_6')
+                    '0010814-Region_1', '0010814-Region_2')
 
 for (i in seq_along(samples)) {
   if (!dir.exists(file.path(plot_dir, paste0('individual/', names(samples)[i])))){dir.create(file.path(plot_dir, paste0('individual/', names(samples)[i])), recursive = T)}
@@ -84,75 +85,51 @@ saveRDS(gene_list, file.path(data_dir, 'Xenium_tumor_gene_list.rds'))
 
 # Define resolution to use and annotations for each tissue  -------------------------------------
 resolutions_to_use <- c('SCT_snn_res.0.3', 'SCT_snn_res.0.3', 
-                        'SCT_snn_res.0.2', 'SCT_snn_res.0.1',
-                        'SCT_snn_res.0.7', 'SCT_snn_res.0.8')
+                        'SCT_snn_res.0.2', 'SCT_snn_res.0.1')
 
 annotation_clusters <- list (
   '0010501-Region_1' = c('0' = 'Ependymal-like',
                          '1' = 'NPC-like',
                          '2' = 'Mesenchymal',
-                         '3' = 'Immune',
+                         '3' = 'Myeloid',
                          '4' = 'Neuroepithelial-like',
                          '5' = 'NPC-like',
                          '6' = 'Endothelial',
                          '7' = 'NPC-like',
                          '8' = 'NPC-like',
-                         '9' = 'Immune'),
+                         '9' = 'T-cell'),
   '0010501-Region_2' = c('0' = 'Ependymal-like',
                          '1' = 'Neuroepithelial-like',
                          '2' = 'Mesenchymal',
                          '3' = 'NPC-like',
-                         '4' = 'Immune',
+                         '4' = 'Myeloid',
                          '5' = 'Endothelial',
-                         '6' = 'Immune',
+                         '6' = 'Myeloid',
                          '7' = 'NPC-like',
                          '8' = 'Ependymal-like',
                          '9' = 'NPC-like',
                          '10' = 'Ependymal-like'),
   '0010814-Region_1' = c('0' = 'Ependymal-like',
-                         '1' = 'Immune',
+                         '1' = 'Neurons',
                          '2' = 'NPC-like',
-                         '3' = 'Immune',
-                         '4' = 'Immune',
-                         '5' = 'Immune',
+                         '3' = 'Myeloid',
+                         '4' = 'Neurons',
+                         '5' = 'Myeloid',
                          '6' = 'Radial glia-like',
                          '7' = 'Neuroepithelial-like',
                          '8' = 'Ependymal-like',
                          '10' = 'Radial glia-like',
-                         '11' = 'Ependymal-like'), 
+                         '11' = 'Ependymal-like',
+                         '13' = 'Mesenchymal'), 
   '0010814-Region_2' = c('0' = 'Neuroepithelial-like',
-                         '1' = 'Immune',
+                         '1' = 'Myeloid',
                          '2' = 'Neurons',
                          '3' = 'NPC-like',
-                         '4' = 'Immune',
+                         '4' = 'Myeloid',
                          '5' = 'Mesenchymal',
                          '6' = 'Ependymal-like',
                          '7' = 'Mesenchymal',
-                         '8' = 'NPC-like'),
-  '0010814-Region_5' = c('0' = 'Neuroepithelial-like',
-                         '1' = 'NPC-like',
-                         '2' = 'Ependymal-like',
-                         '3' = 'Endothelial',
-                         '4' = 'VLMCs',
-                         '5' = 'Neuroepithelial-like',
-                         '6' = 'Immune',
-                         '7' = 'Neuroepithelial-like',
-                         '8' = 'Neuroepithelial-like',
-                         '9' = 'Neuroepithelial-like',
-                         '10' = 'NPC-like'),
-  '0010814-Region_6' = c('0' = 'Neuroepithelial-like',
-                         '1' = 'Ependymal-like',
-                         '2' = 'NPC-like',
-                         '3' = 'Ependymal-like',
-                         '4' = 'NPC-like',
-                         '5' = 'Endothelial',
-                         '6' = 'NPC-like',
-                         '7' = 'Neuroepithelial-like',
-                         '8' = 'Neuroepithelial-like',
-                         '9' = 'Immune',
-                         '10' = 'NPC-like',
-                         '11' = 'Neuroepithelial-like',
-                         '12' = 'Neurons')
+                         '8' = 'NPC-like')
 )
 
 
@@ -211,24 +188,26 @@ for (i in seq_along(samples)) {
   rasterize(plot, layers='Point', dpi=800)
   ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/3_ImageDimPlot_malignant.pdf')), width=8, height=5)
   
-  # # Perform niche analysis
-  # data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
-  # 
-  # # Plot niche images
-  # celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4, 
-  #                               dark.background = F) + ggtitle("Cell type")
-  # niche.plot <- ImageDimPlot(data, group.by = "niches", fov = "fov",  cols = col_niches, border.size = NA, size = 0.4, 
-  #                            dark.background = F) + ggtitle("Niches") 
-  # celltype.plot | niche.plot
-  # ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/4_ImageDimPlot_niche.pdf')), width=16, height=5)
-  # 
-  # # Save data table with frequency
-  # niche_freq <- as.data.frame(t(table(data$group, data$niches)))
-  # write_csv(niche_freq, file.path(data_dir, paste0('individual/', names(samples)[i], '/3_0010540-Region_1_niche_cell_number.csv')))
-  # 
-  # # Plot niche frequency
-  # plot_bar(data, data$niches, data$group, colors_groups) 
-  # ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/5_BarPlot_niches.pdf')), width=6, height=5)
-  # 
+  # Perform niche analysis
+  data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
+
+  # Plot niche images
+  celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4,
+                                dark.background = F) + ggtitle("Cell type")
+  niche.plot <- ImageDimPlot(data, group.by = "niches", fov = "fov",  cols = col_niches, border.size = NA, size = 0.4,
+                             dark.background = F) + ggtitle("Niches")
+  celltype.plot | niche.plot
+  ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/4_ImageDimPlot_niche.pdf')), width=16, height=5)
+
+  # Save data table with frequency
+  niche_freq <- as.data.frame(t(table(data$group, data$niches)))
+  write_csv(niche_freq, file.path(data_dir, paste0('individual/', names(samples)[i], '/3_0010540-Region_1_niche_cell_number.csv')))
+
+  # Plot niche frequency
+  plot_bar(data, data$niches, data$group, colors_groups)
+  ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/5_BarPlot_niches.pdf')), width=6, height=5)
+  
+  # save annotated object
+  qsave(data, file.path(seurat_obj_dir, paste0('Seurat_obj', names(samples)[i], '.qs')))
 }
 
