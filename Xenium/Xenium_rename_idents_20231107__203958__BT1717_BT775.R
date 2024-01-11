@@ -85,7 +85,7 @@ saveRDS(gene_list, file.path(data_dir, 'Xenium_tumor_gene_list.rds'))
 
 # Define resolution to use and annotations for each tissue  -------------------------------------
 resolutions_to_use <- c('SCT_snn_res.0.3', 'SCT_snn_res.0.3', 
-                        'SCT_snn_res.0.2', 'SCT_snn_res.0.1')
+                        'SCT_snn_res.0.2', 'SCT_snn_res.0.2')
 
 annotation_clusters <- list (
   '0010501-Region_1' = c('0' = 'Ependymal-like',
@@ -112,24 +112,38 @@ annotation_clusters <- list (
   '0010814-Region_1' = c('0' = 'Ependymal-like',
                          '1' = 'Neurons',
                          '2' = 'NPC-like',
-                         '3' = 'Myeloid',
+                         '3' = 'Endothelial',
                          '4' = 'Neurons',
                          '5' = 'Myeloid',
                          '6' = 'Radial glia-like',
                          '7' = 'Neuroepithelial-like',
                          '8' = 'Ependymal-like',
+                         '9' = 'Unassigned',
                          '10' = 'Radial glia-like',
                          '11' = 'Ependymal-like',
-                         '13' = 'Mesenchymal'), 
-  '0010814-Region_2' = c('0' = 'Neuroepithelial-like',
-                         '1' = 'Myeloid',
-                         '2' = 'Neurons',
-                         '3' = 'NPC-like',
-                         '4' = 'Myeloid',
-                         '5' = 'Mesenchymal',
-                         '6' = 'Ependymal-like',
+                         '12' = 'Unassigned',
+                         '13' = 'Unassigned'), 
+  '0010814-Region_2' = c('0' = 'Ependymal-like',
+                         '1' = 'NPC-like',
+                         '2' = 'Endothelial',
+                         '3' = 'Neuroepithelial-like',
+                         '4' = 'Ependymal-like',
+                         '5' = 'NPC-like',
+                         '6' = 'Myeloid',
                          '7' = 'Mesenchymal',
-                         '8' = 'NPC-like')
+                         '8' = 'Endothelial',
+                         '9' = 'Ependymal-like',
+                         '10' = 'Unassigned',
+                         '11' = 'Ependymal-like',
+                         '12' = 'NPC-like',
+                         '13' = 'Unassigned',
+                         '14' = 'Unassigned',
+                         '15' = 'Unassigned',
+                         '16' = 'Unassigned',
+                         '17' = 'Unassigned',
+                         '18' = 'Unassigned',
+                         '19' = 'Unassigned',
+                         '20' = 'Unassigned')
 )
 
 
