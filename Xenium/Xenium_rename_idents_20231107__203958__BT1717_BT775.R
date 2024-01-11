@@ -29,7 +29,7 @@ source(file.path(resource_dir, 'Plotting_functions.R'))
 if (!dir.exists(file.path(plot_dir, 'individual'))){dir.create(file.path(plot_dir, 'individual'), recursive = T)}
 
 samples <- c('0010501-Region_1', '0010501-Region_2', 
-              '0010814-Region_1', '0010814-Region_2')
+             '0010814-Region_1', '0010814-Region_2')
 names(samples) <- c('0010501-Region_1', '0010501-Region_2', 
                     '0010814-Region_1', '0010814-Region_2')
 
@@ -204,7 +204,7 @@ for (i in seq_along(samples)) {
   
   # Perform niche analysis
   data <- BuildNicheAssay(object = data, fov = "fov", group.by = "group", niches.k = 3, neighbors.k = 30)
-
+  
   # Plot niche images
   celltype.plot <- ImageDimPlot(data, group.by = 'group', fov = "fov",  cols = colors_groups, border.size = NA, size = 0.4,
                                 dark.background = F) + ggtitle("Cell type")
@@ -212,11 +212,11 @@ for (i in seq_along(samples)) {
                              dark.background = F) + ggtitle("Niches")
   celltype.plot | niche.plot
   ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/4_ImageDimPlot_niche.pdf')), width=16, height=5)
-
+  
   # Save data table with frequency
   niche_freq <- as.data.frame(t(table(data$group, data$niches)))
   write_csv(niche_freq, file.path(data_dir, paste0('individual/', names(samples)[i], '/3_0010540-Region_1_niche_cell_number.csv')))
-
+  
   # Plot niche frequency
   plot_bar(data, data$niches, data$group, colors_groups)
   ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/5_BarPlot_niches.pdf')), width=6, height=5)
@@ -224,4 +224,5 @@ for (i in seq_along(samples)) {
   # save annotated object
   qsave(data, file.path(seurat_obj_dir, paste0('Seurat_obj', names(samples)[i], '.qs')))
 }
+
 

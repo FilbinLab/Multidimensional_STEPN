@@ -135,10 +135,10 @@ annotation_clusters <- list (
                          '2' = 'Ependymal-like',
                          '3' = 'Neuroepithelial-like', 
                          '4' = 'Myeloid',
-                         '5' = 'Neurons',
-                         '6' = 'Neurons',
+                         '5' = 'VLMCs',
+                         '6' = 'VLMCs',
                          '7' = 'Myeloid', 
-                         '8' = 'Neurons', 
+                         '8' = 'VLMCs', 
                          '9' = 'Ependymal-like', 
                          '10' = 'NPC-like', 
                          '11' = 'Myeloid', 
@@ -149,20 +149,20 @@ annotation_clusters <- list (
                          '2' = 'NPC-like',
                          '3' = 'Myeloid', 
                          '4' = 'Neuroepithelial-like',
-                         '5' = 'Neurons',
-                         '6' = 'Neurons',
-                         '7' = 'Neurons', 
+                         '5' = 'VLMCs',
+                         '6' = 'VLMCs',
+                         '7' = 'VLMCs', 
                          '8' = 'Ependymal-like', 
                          '9' = 'NPC-like',
                          '10' = 'NPC-like'),
   '0010619-Region_3' = c('0' = 'Ependymal-like',
                          '1' = 'NPC-like',
                          '2' = 'Ependymal-like',
-                         '3' = 'Neurons', 
+                         '3' = 'VLMCs', 
                          '4' = 'Ependymal-like',
                          '5' = 'Myeloid',
                          '6' = 'Neuroepithelial-like',
-                         '7' = 'Neurons', 
+                         '7' = 'VLMCs', 
                          '8' = 'NPC-like', 
                          '9' = 'Radial glia-like',
                          '10' = 'NPC-like'),
@@ -242,7 +242,7 @@ for (i in seq_along(samples)) {
   
   
   # Visualize  distribution clusters 
-  plot <- ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.3, 
+  plot <- ImageDimPlot(data, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.4, 
                        dark.background = F) + ggtitle(names(samples)[i]) + NoLegend()
   rasterize(plot, layers='Point', dpi=800)
   ggsave(file.path(plot_dir, paste0('individual/', names(samples)[i], '/2_ImageDimPlot.pdf')), width=6, height=5)
