@@ -22,7 +22,7 @@ data_files <- c('20231020__200939__BT2126_BT1745/data/individual/cell_ID_0010652
               '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010575-Region_1.csv',
               '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010575-Region_2.csv',
               '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010575-Region_3.csv',
-              '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_1.csv',
+              '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_3.csv',
               '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_2.csv',
               '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_3.csv',
               '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_4.csv',
@@ -30,8 +30,8 @@ data_files <- c('20231020__200939__BT2126_BT1745/data/individual/cell_ID_0010652
               
               '20231107__203958__BT1717_BT775/data/individual/cell_ID_0010501-Region_1.csv',
               '20231107__203958__BT1717_BT775/data/individual/cell_ID_0010501-Region_2.csv',
-              #'20231107__203958__BT1717_BT775/data/individual/cell_ID_0010814-Region_1.csv',
-              #'20231107__203958__BT1717_BT775/data/individual/cell_ID_0010814-Region_2.csv',
+              '20231107__203958__BT1717_BT775/data/individual/cell_ID_0010814-Region_1.csv',
+              '20231107__203958__BT1717_BT775/data/individual/cell_ID_0010814-Region_2.csv',
               
               '20231109__203408__BT1804_BT2169/data/individual/cell_ID_0010498-Region_1.csv', 
               '20231109__203408__BT1804_BT2169/data/individual/cell_ID_0010775-Region_1.csv', 
@@ -54,14 +54,14 @@ for (i in seq_along(data_files)) {
 }
 
 names(metadata) <- c('0010652-Region_4', '0010575-Region_1', '0010575-Region_2', '0010575-Region_3', 
-                     '0010619-Region_1', '0010619-Region_2', '0010619-Region_3', '0010619-Region_4', '0010619-Region_5', 
+                     '0010619-Region_3', '0010619-Region_2', '0010619-Region_3', '0010619-Region_4', '0010619-Region_5', 
                      '0010501-Region_1', '0010501-Region_2', 
-                     #'0010814-Region_1', '0010814-Region_2',
+                     '0010814-Region_1', '0010814-Region_2',
                      '0010498-Region_1', '0010775-Region_1', 
                      '0010540-Region_1', '0010540-Region_2', '0010540-Region_3', '0010540-Region_4', 
                      '0010553-Region_1', '0010553-Region_2', '0010553-Region_3', '0010553-Region_4')
 # names(proportions) <- c('0010652-Region_4', '0010575-Region_1', '0010575-Region_2', '0010575-Region_3', 
-#                      '0010619-Region_1', '0010619-Region_2', '0010619-Region_3', '0010619-Region_4', '0010619-Region_5', 
+#                      '0010619-Region_3', '0010619-Region_2', '0010619-Region_3', '0010619-Region_4', '0010619-Region_5', 
 #                      '0010501-Region_1', '0010501-Region_2', '0010814-Region_1', '0010814-Region_2',
 #                      '0010498-Region_1', '0010775-Region_1', 
 #                      '0010540-Region_1', '0010540-Region_2', '0010540-Region_3', '0010540-Region_4', 
@@ -70,7 +70,7 @@ names(metadata) <- c('0010652-Region_4', '0010575-Region_1', '0010575-Region_2',
 names(proportions) <- c('BT2126_Region_4', '7EP41_Region_1', '7EP41_Region_2', '7EP41_Region_3', 
                         '3EP8_Region_1.1', '3EP8_Region_2.1', '3EP8_Region_3', '7EP1_Region_4.1', '7EP1_Region_5', 
                         'BT775_Region_1', 'BT775_Region_2', 
-                        #'BT1717_Region_1', 'BT1717_Region_2',
+                        'BT1717_Region_1', 'BT1717_Region_2',
                         'BT2169_Region_1', 'BT1804_Region_1', 
                         '11EP22_Region_1', '11EP22_Region_2', '11EP22_Region_3', '7EP41_Region_4', 
                         '3EP8_Region_1.2', '3EP8_Region_2.2', 'BT1743_Region_3', '7EP1_Region_4.2')
@@ -110,24 +110,14 @@ ggplot(df_melted, aes(x = Xenium_Region, y = Frequency, fill = Metaprogram)) +
 ggsave(file.path(base_dir, 'Metaprogram_proportion.pdf'), width=10, height=5)
 
 
-# export average proportion
-metaprogram_proportion_summary <- metaprogram_proportion %>%
-  summarise_all(mean,  na.rm = TRUE)
-
-metaprogram_proportion_summary <- t(metaprogram_proportion_summary)
-metaprogram_proportion_summary <- as.data.frame(metaprogram_proportion_summary)
-
-metaprogram_proportion_summary <- metaprogram_proportion_summary[ ,-c(1, 11:17)]
-
-write_csv(metaprogram_proportion_summary, file.path(base_dir, 'Xenium_Metaprogram_proportion_summary.csv'))
-
 ## Recreate plot only with 1 region per sample ---------------------------
 
 data_files <- c('20231020__200939__BT2126_BT1745/data/individual/cell_ID_0010652-Region_4.csv',
                 '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010575-Region_3.csv',
-                '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_1.csv',
+                '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_3.csv',
                 '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_5.csv',
                 '20231107__203958__BT1717_BT775/data/individual/cell_ID_0010501-Region_2.csv',
+                '20231107__203958__BT1717_BT775/data/individual/cell_ID_0010814-Region_2.csv',
                 '20231109__203408__BT1804_BT2169/data/individual/cell_ID_0010498-Region_1.csv', 
                 '20231109__203408__BT1804_BT2169/data/individual/cell_ID_0010775-Region_1.csv', 
                 '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010540-Region_1.csv',
@@ -141,13 +131,13 @@ for (i in seq_along(data_files)) {
   proportions[[i]] <- prop.table(table(metadata[i]))
 }
 
-names(metadata) <- c('BT2126_Region_4', '7EP41_Region_3', '3EP8_Region_1', '7EP1_Region_5',
-                     'BT775_Region_2', 'BT2169_Region_1', 'BT1804_Region_1',
-                     '11EP22_Region_1',  'BT1743_Region_3')
+names(metadata) <- c('BT2126', '7EP41', '3EP8', '7EP1',
+                     'BT775', 'BT1717', 'BT2169', 'BT1804',
+                     '11EP22',  'BT1743')
 
-names(proportions) <- c('BT2126_Region_4', '7EP41_Region_3', '3EP8_Region_1', '7EP1_Region_5',
-                     'BT775_Region_2', 'BT2169_Region_1', 'BT1804_Region_1',
-                     '11EP22_Region_1',  'BT1743_Region_3')
+names(proportions) <- c('BT2126', '7EP41', '3EP8', '7EP1',
+                     'BT775','BT1717', 'BT2169', 'BT1804',
+                     '11EP22',  'BT1743')
 
 
 # bind rows together and transform into df
@@ -163,7 +153,7 @@ df_melted <- metaprogram_proportion %>%
 df_melted$Metaprogram <- factor(df_melted$Metaprogram, 
                                 levels = c('Neuroepithelial-like', "Radial glia-like", 'NPC-like',
                                            "Ependymal-like", "Mesenchymal", 'Myeloid', 'T-cell', 'Endothelial', 'VLMCs', 'Microglia',
-                                           'Oligodendrocytes', 'Neurons', 'Unassigned', '13', '9', '10', '11', '14', '12', '15'))
+                                           'Oligodendrocytes',  'Unassigned'))
 
 
 # Plot a stacked bar plot
@@ -182,5 +172,18 @@ ggplot(df_melted, aes(x = Xenium_Region, y = Frequency, fill = Metaprogram)) +
         axis.title=element_text(size=14),
         legend.text = element_text(size = 14),
         legend.title = element_blank()) 
-ggsave(file.path(base_dir, 'Metaprogram_proportion_selected.pdf'), width=6, height=5)
+ggsave(file.path(base_dir, 'Metaprogram_proportion_selected.pdf'), width=7, height=5)
+
+
+
+
+# export average proportion
+metaprogram_proportion_summary <- metaprogram_proportion %>%
+  summarise_all(mean,  na.rm = TRUE)
+
+metaprogram_proportion_summary <- t(metaprogram_proportion_summary)
+metaprogram_proportion_summary <- as.data.frame(metaprogram_proportion_summary)
+metaprogram_proportion_summary$Metaprogram <- rownames(metaprogram_proportion_summary)
+
+write_csv(metaprogram_proportion_summary, file.path(base_dir, 'Xenium_Metaprogram_proportion_summary.csv'))
 
