@@ -4,8 +4,15 @@
 - Preliminary analysis from Carlos (clustering) copied in Sara's folder, under `/n/scratch/users/s/sad167/EPN/Xenium/data/processed_data_Carlos`
 
 1 - Run scripts called Xenium_rename_idents_ followed by date of run. The scripts contain the program annotations and creates preliminary graphs.
+  *20231020: 0010652__Region_4
+  *20231102: '0010575__Region_1', '0010575__Region_2', '0010575__Region_3', 
+            '0010619__Region_1', '0010619__Region_2', '0010619__Region_3', '0010619__Region_4', '0010619__Region_5'
+  *20231107: '0010501-Region_1', '0010501-Region_2'
+  *20231109: '0010498__Region_1', '0010775__Region_1'
+  *20231208 (samples used for postXenium-IF): '0010540__Region_1', '0010540__Region_2', '0010540__Region_3', '0010540__Region_4', 
+                      '0010553__Region_1', '0010553__Region_2', '0010553__Region_3', '0010553__Region_4'
 
-- Daeun's metadata path with programs annotation: `/labs/mfilbin/homes/djeong/dj83/analysis/Xenium/samples_metadata`
+
 
 
 - Parameters for Jupyter session in O2:
