@@ -54,7 +54,9 @@ samples <- c('BT2126', '7EP41', '3EP8', '7EP1',
 # create empty lists where to store objects
 seurat_obj_list <- list()
 plot_list <- list()
-
+plot_list_immune <- list()
+plot_list_mes <- list()
+plot_list_vascular <- list()
 
 for (i in seq_along(seurat_obj_dir)) {
   # read file
@@ -62,9 +64,24 @@ for (i in seq_along(seurat_obj_dir)) {
   print(seurat_obj_dir[i])
   
   # Visualize  distribution clusters 
-  plot_list[[i]] <- ImageDimPlot(seurat_obj_list, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.5, 
+  plot_list[[i]] <- ImageDimPlot(seurat_obj_list, group.by = 'group', cols = colors_groups, border.size = NA, size = 0.35, 
                        dark.background = F) + NoLegend()
   rasterize(plot_list[[i]], dpi=400)
+  
+  # Visualize distribution immune cells 
+  plot_list_immune[[i]] <- ImageDimPlot(seurat_obj_list, group.by = 'group', cols = colors_immune, border.size = NA, size = 0.35, 
+                                 dark.background = F) + NoLegend()
+  rasterize(plot_list_immune[[i]], dpi=400)
+  
+  # Visualize distribution MES-like cells 
+  plot_list_mes[[i]] <- ImageDimPlot(seurat_obj_list, group.by = 'group', cols = colors_mesen, border.size = NA, size = 0.35, 
+                                        dark.background = F) + NoLegend()
+  rasterize(plot_list_mes[[i]], dpi=400)
+  
+  # Visualize distribution vascular cells 
+  plot_list_vascular[[i]] <- ImageDimPlot(seurat_obj_list, group.by = 'group', cols = colors_vascular, border.size = NA, size = 0.35, 
+                                     dark.background = F) + NoLegend()
+  rasterize(plot_list_vascular[[i]], dpi=400)
 }
 
 
@@ -72,3 +89,14 @@ combined_plot <- cowplot::plot_grid(plotlist = plot_list, ncol=5)
 rasterize(combined_plot, dpi=400)
 ggsave(file.path(plot_dir, 'Spatial_summary.pdf'), width=16, height=5)
 
+combined_plot <- cowplot::plot_grid(plotlist = plot_list_immune, ncol=5) 
+rasterize(combined_plot, dpi=400)
+ggsave(file.path(plot_dir, 'Spatial_summary_immune.pdf'), width=16, height=5)
+
+combined_plot <- cowplot::plot_grid(plotlist = plot_list_mes, ncol=5) 
+rasterize(combined_plot, dpi=400)
+ggsave(file.path(plot_dir, 'Spatial_summary_mesenchymal.pdf'), width=16, height=5)
+
+combined_plot <- cowplot::plot_grid(plotlist = plot_list_vascular, ncol=5) 
+rasterize(combined_plot, dpi=400)
+ggsave(file.path(plot_dir, 'Spatial_summary_vascular.pdf'), width=16, height=5)
