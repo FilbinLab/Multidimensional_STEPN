@@ -3,7 +3,7 @@
 - Raw data (fresh from Xenium machine) copied in Sara's folder, under `/n/scratch/users/s/sad167/EPN/Xenium/data/raw_data`
 - Preliminary analysis from Carlos (clustering) copied in Sara's folder, under `/n/scratch/users/s/sad167/EPN/Xenium/data/processed_data_Carlos`
 
-1 - Run scripts called Xenium_rename_idents_ followed by date of run. The scripts contain the program annotations and creates preliminary graphs.
+1 - Run scripts called `0_Xenium_rename_idents_` followed by date of run. The scripts contain the program annotations and creates preliminary graphs.
 * *20231020: 0010652__Region_4
 * *20231102: '0010575__Region_1', '0010575__Region_2', '0010575__Region_3', 
             '0010619__Region_1', '0010619__Region_2', '0010619__Region_3', '0010619__Region_4', '0010619__Region_5'
@@ -12,6 +12,11 @@
 * *20231208 (samples used for postXenium-IF): '0010540__Region_1', '0010540__Region_2', '0010540__Region_3', '0010540__Region_4', 
                       '0010553__Region_1', '0010553__Region_2', '0010553__Region_3', '0010553__Region_4'
 
+2 - Run scripts `1_Xenium_metaprogram_distribution.R` and `2_Xenium_images_distribution.R` to plot the barplot containing metaprogram frequency, respectively image plots of tumors colored by metaprogram annotation.
+
+3- Run spatial calculations (clustering coefficients, neighborhood analyses) for each individual tumor running Python scripts called `3_Sara_neighbors_` followed by date of run.
+
+4 - Put together results by averaging across tumor sections running Python script `4_Neighbors_average.ipynb`. To plot the neighborhood analysis heatmap, use R script `5_Neighbors_average_heatmap.R`
 
 
 
@@ -21,16 +26,3 @@
   * *Total Job Memory in GB for the job*: Usually `48` is enough
 - To run niches analysis using Seurat package (click [here](https://satijalab.org/seurat/articles/seurat5_spatial_vignette_2#mouse-brain-10x-genomics-xenium-in-situ:) for more informations):
 ```
-data <- qread('/n/scratch3/users/c/cao385/Xenium/results/20231115__203753__BT1873_BT1733/0010697-Region_1/0010697-Region_1.qs')
-Idents(data) <- data$SCT_snn_res.0.1
-data <- RenameIdents(data, '0' = 'AC-like', '1' = 'Ependymal-like-1', '2' = 'Glio_angiogenesis', '3' = 'Tcells', '4' = 'Neurons', '5' = 'Normal')
-data$Annotation <- ifelse(Idents(data) %in% c('Tcells', 'Normal'), 'Immune', 'Malignant')
-
-data <- BuildNicheAssay(object = data, fov = "fov", group.by = "Annotation", niches.k = 5, neighbors.k = 30)
-celltype.plot <- ImageDimPlot(data, group.by = "Annotation", size = 0.8, cols = colors_to_use[1:2], dark.background = F) + ggtitle("Cell type")
-niche.plot <- ImageDimPlot(data, group.by = "niches", size = 0.8, dark.background = F) + ggtitle("Niches") + scale_fill_manual(values = colors_to_use)
-celltype.plot | niche.plot
-
-t(table(data$Annotation, data$niches))
-```
-- Neighbor analysis in `Neighbors-Daeun.nbconvert.ipynb` script.
