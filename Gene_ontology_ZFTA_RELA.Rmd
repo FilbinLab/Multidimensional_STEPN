@@ -1,0 +1,113 @@
+---
+title: "Gene ontology of ZFTA-RELA metaprogram markers"
+author: "Sara Danielli"
+date: '`r format(Sys.time(), "Last modified: %b %d %Y")`'
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+---
+
+## Set up
+```{r message=FALSE, warning=FALSE, setup, include=FALSE}
+# Load packages -----------------------------------
+library(knitr)
+opts_chunk$set(cache = FALSE, warning = FALSE, comment = FALSE, message = FALSE)
+```
+
+```{r preparation environment, message=FALSE, warning=FALSE}
+# set seed for reproducibility -----------------------------------
+set.seed(2022)
+
+# load libraries -----------------------------------
+library(readxl)
+library(ggplot2) 
+library(SingleCellExperiment)
+library(DESeq2)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(tidyverse)
+library(msigdbr)
+library(SCpubr)
+library(qs)
+
+# Organize environment  -----------------------------------
+# base directory
+base_dir <- "/Users/sdaniell/Dropbox (Partners HealthCare)/Sara Danielli/Project/Ependymoma/6 - scRNAseq models"
+
+# data directory for storing output
+analysis_dir <- file.path(base_dir, 'analysis')
+plot_dir <- file.path(analysis_dir, 'plots/GSEA_clusters')
+if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
+
+# data directory with style functions
+resource_dir <- file.path(base_dir, 'scripts/resources')
+source(file.path(resource_dir, 'Plot_style.R'))
+
+# load seurat object
+seurat_obj <- qread(file.path(resource_dir, "seurat_obj_ZFTA_Frozen_mergedNPCs.qs"))
+
+# Load tumor signatures
+ref.gene.EPN <- qread(file.path(resource_dir, "ZFTA_frozen_DE_list_signature1_MergedNPCs2.qs"))
+# rename
+names(ref.gene.EPN) <- c('NPC-like', 'MES-like', 'Radial glia-like', 'Ependymal-like', 'Neuroepithelial-like', 'Cycling')
+  
+```
+
+
+# Perform overrrepresentation analysis 
+Let's find the pathways enriched in up/down regulated genes using ClusterProfiler.
+
+## Over-representation Analysis (ORA)
+
+### Marker gene preparation
+We're interested in what pathways are over-represented in each metaprogram
+
+#### Background set
+```{r get_background_set, live = TRUE}
+background_set <- rownames(seurat_obj)
+```
+
+### Gene Ontology ORA
+
+#### Run `enrichGO()`
+
+Now that we have our background set and our genes of interest, we're ready to run ORA using the `enrichGO()` function.
+
+```{r go_ora}
+go_ora_results <- list()
+for (i in seq_along(ref.gene.EPN)) {
+go_ora_results[[i]] <- enrichGO(gene = ref.gene.EPN[[i]],  #
+                           universe = background_set,  # Background genes
+                           keyType = "SYMBOL",  # Our genes are gene symbols
+                           OrgDb = org.Hs.eg.db,  # Supports conversion, if needed
+                           ont = "BP",  # Biological process
+                           pAdjustMethod = "BH",  # FDR
+                           pvalueCutoff = 0.01) 
+}
+names(go_ora_results) <- names(ref.gene.EPN)
+```
+
+
+Let's convert the result slot into a data frame.
+
+```{r go_df}
+go_result_df <- list()
+for (i in seq_along(ref.gene.EPN)) {
+  go_result_df[[i]] <- data.frame(go_ora_results[[i]]@result)
+  go_result_df[[i]]$cluster <- names(ref.gene.EPN[i])
+}
+
+# Concatenate dataframes
+go_result_df_concat <- do.call(rbind, go_result_df)
+```
+
+Let's take a look at the significant GO sets
+
+```{r filter_padj, live = TRUE}
+go_result_df_concat <- go_result_df_concat |>
+  dplyr::filter(p.adjust < 0.05)
+write.csv(go_result_df_concat, file.path(plot_dir, "1_enrichGO_clusters.csv"))
+write.xlsx(go_result_df_concat, file.path(plot_dir, "1_enrichGO_clusters.xlsx"))
+
+```
