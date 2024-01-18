@@ -144,8 +144,12 @@ names(proportions) <- c('BT2126', '7EP41', '3EP8', '7EP1',
 metaprogram_proportion <- bind_rows(proportions, .id = "Xenium_Region")
 metaprogram_proportion <- as.data.frame(metaprogram_proportion)
 
+# reorder samples from highest to lowest ordered
+order <- c('BT775', '7EP41', 'BT1743','BT2126', 'BT2169', '11EP22','BT1804', '7EP1', '3EP8', 'BT1717')
+metaprogram_proportion2 <- metaprogram_proportion[order(match(metaprogram_proportion$Xenium_Region, order)), ]
+
 # change df structure for plotting
-df_melted <- metaprogram_proportion %>%
+df_melted <- metaprogram_proportion2 %>%
   gather(key = "Metaprogram", value = "Frequency", -Xenium_Region)
 #write_csv(df_melted, file.path(base_dir, 'Xenium_Metaprogram_proportion.csv'))
 
@@ -157,7 +161,9 @@ df_melted$Metaprogram <- factor(df_melted$Metaprogram,
 
 
 # Plot a stacked bar plot
-ggplot(df_melted, aes(x = Xenium_Region, y = Frequency, fill = Metaprogram)) +
+
+ggplot(df_melted, aes(x = reorder(Xenium_Region, -as.numeric(factor(Xenium_Region, levels = levels(Xenium_Region)))), 
+                      y = Frequency, fill = Metaprogram)) +
   scale_fill_manual(values = colors_groups_barplot) +
   geom_bar(stat = "identity", position = "fill", color="black") +
   labs (y='Proportion', x='') + 
