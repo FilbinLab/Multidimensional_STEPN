@@ -52,12 +52,6 @@ samples <- c('BT2126', '7EP41', '3EP8', '7EP1',
              'BT775', 'BT1717', 'BT2169', 'BT1804',
              '11EP22',  'BT1743')
 
-# create empty lists where to store objects
-seurat_obj_list <- list()
-plot_list <- list()
-plot_list_immune <- list()
-plot_list_mes <- list()
-plot_list_vascular <- list()
 
 for (i in seq_along(seurat_obj_dir)) {
   # read file
@@ -66,11 +60,12 @@ for (i in seq_along(seurat_obj_dir)) {
   
   # slim down to reduce memory consumption
   seurat_obj <- DietSeurat(seurat_obj,  assays = 'Xenium')
-  print(seurat_obj)
+  seurat_obj
   
   # print image
   plot <- ImageDimPlot(seurat_obj, fov = 'fov', group.by = 'group', cols = colors_groups, border.size = NA, size = 0.35, 
                                  dark.background = F, axes = TRUE) + NoLegend()
+  plot
 
   # extract metaprogram
   metadata <- as.data.frame(seurat_obj@meta.data)
@@ -114,7 +109,16 @@ for (i in seq_along(seurat_obj_dir)) {
                        dark.background = F, axes = TRUE) + NoLegend()
   plot + plot_normalized
   
+  
+  
+  
   # creare matrix fatta di 0/1 per ogni color
+  # Get the spatial data for the current FOV
+  spatial_data <- seurat_obj$Xenium[["norm_coordinates"]]
+  
+  # Get the image matrix
+  image_matrix <- spatial_data$image
+  
   # aggiungere una riga e colonna
   # contare i punti che non hanno cambiato valore ma che non sono 0
 
