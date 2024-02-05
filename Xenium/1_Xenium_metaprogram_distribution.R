@@ -18,32 +18,32 @@ resource_dir  <- file.path('/n/scratch/users/s/sad167/EPN/Ependymoma2023/Xenium/
 source(file.path(resource_dir, 'Plotting_functions.R'))
 
 data_files <- c('20231020__200939__BT2126_BT1745/data/individual/cell_ID_0010652-Region_4.csv',
-              
-              '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010575-Region_1.csv',
-              '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010575-Region_2.csv',
-              '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010575-Region_3.csv',
-              '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_3.csv',
-              '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_2.csv',
-              '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_3.csv',
-              '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_4.csv',
-              '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_5.csv',
-              
-              '20231107__203958__BT1717_BT775/data/individual/cell_ID_0010501-Region_1.csv',
-              '20231107__203958__BT1717_BT775/data/individual/cell_ID_0010501-Region_2.csv',
-              '20231107__203958__BT1717_BT775/data/individual/cell_ID_0010814-Region_1.csv',
-              '20231107__203958__BT1717_BT775/data/individual/cell_ID_0010814-Region_2.csv',
-              
-              '20231109__203408__BT1804_BT2169/data/individual/cell_ID_0010498-Region_1.csv', 
-              '20231109__203408__BT1804_BT2169/data/individual/cell_ID_0010775-Region_1.csv', 
-              
-              '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010540-Region_1.csv',
-              '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010540-Region_2.csv',
-              '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010540-Region_3.csv',
-              '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010540-Region_4.csv',
-              '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010553-Region_1.csv',
-              '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010553-Region_2.csv',
-              '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010553-Region_3.csv',
-              '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010553-Region_4.csv')
+                
+                '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010575-Region_1.csv',
+                '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010575-Region_2.csv',
+                '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010575-Region_3.csv',
+                '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_3.csv',
+                '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_2.csv',
+                '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_3.csv',
+                '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_4.csv',
+                '20231102__215055__7EP1_7EP41_3EP8/data/individual/cell_ID_0010619-Region_5.csv',
+                
+                '20231107__203958__BT1717_BT775/data/individual/cell_ID_0010501-Region_1.csv',
+                '20231107__203958__BT1717_BT775/data/individual/cell_ID_0010501-Region_2.csv',
+                '20231107__203958__BT1717_BT775/data/individual/cell_ID_0010814-Region_1.csv',
+                '20231107__203958__BT1717_BT775/data/individual/cell_ID_0010814-Region_2.csv',
+                
+                '20231109__203408__BT1804_BT2169/data/individual/cell_ID_0010498-Region_1.csv', 
+                '20231109__203408__BT1804_BT2169/data/individual/cell_ID_0010775-Region_1.csv', 
+                
+                '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010540-Region_1.csv',
+                '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010540-Region_2.csv',
+                '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010540-Region_3.csv',
+                '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010540-Region_4.csv',
+                '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010553-Region_1.csv',
+                '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010553-Region_2.csv',
+                '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010553-Region_3.csv',
+                '20231208__193657__3EP8_BT1743_7EP1_11EP22_7EP41/data/individual/cell_ID_0010553-Region_4.csv')
 
 metadata <- list()
 proportions <- list()
@@ -136,8 +136,8 @@ names(metadata) <- c('BT2126', '7EP41', '3EP8', '7EP1',
                      '11EP22',  'BT1743')
 
 names(proportions) <- c('BT2126', '7EP41', '3EP8', '7EP1',
-                     'BT775','BT1717', 'BT2169', 'BT1804',
-                     '11EP22',  'BT1743')
+                        'BT775','BT1717', 'BT2169', 'BT1804',
+                        '11EP22',  'BT1743')
 
 
 # bind rows together and transform into df
@@ -145,13 +145,14 @@ metaprogram_proportion <- bind_rows(proportions, .id = "Xenium_Region")
 metaprogram_proportion <- as.data.frame(metaprogram_proportion)
 
 # reorder samples from highest to lowest ordered
-order <- c('BT775', '7EP41', 'BT1743','BT2126', 'BT2169', '11EP22','BT1804', '7EP1', '3EP8', 'BT1717')
+#order <- c('BT775', '7EP41', 'BT1743','BT2126', 'BT2169', '11EP22','BT1804', '7EP1', '3EP8', 'BT1717')
+order <- c('BT1717', '3EP8', '7EP1', 'BT1804', '7EP41', 'BT1743', 'BT2169', 'BT2126', '11EP22', 'BT775')
 metaprogram_proportion2 <- metaprogram_proportion[order(match(metaprogram_proportion$Xenium_Region, order)), ]
 
 # change df structure for plotting
 df_melted <- metaprogram_proportion2 %>%
   gather(key = "Metaprogram", value = "Frequency", -Xenium_Region)
-#write_csv(df_melted, file.path(base_dir, 'Xenium_Metaprogram_proportion.csv'))
+write_csv(df_melted, file.path(base_dir, 'Xenium_Metaprogram_proportion.csv'))
 
 # reorder so that it is the same as in the paper
 df_melted$Metaprogram <- factor(df_melted$Metaprogram, 
