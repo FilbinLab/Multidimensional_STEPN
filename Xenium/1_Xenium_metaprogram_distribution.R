@@ -163,7 +163,7 @@ df_melted$Metaprogram <- factor(df_melted$Metaprogram,
 
 # Plot a stacked bar plot
 
-ggplot(df_melted, aes(x = reorder(Xenium_Region, -as.numeric(factor(Xenium_Region, levels = levels(Xenium_Region)))), 
+ggplot(df_melted, aes(x = reorder(Xenium_Region, -as.numeric(factor(Xenium_Region, levels = rev(order)))), 
                       y = Frequency, fill = Metaprogram)) +
   scale_fill_manual(values = colors_groups_barplot) +
   geom_bar(stat = "identity", position = "fill", color="black") +
@@ -193,4 +193,3 @@ metaprogram_proportion_summary <- as.data.frame(metaprogram_proportion_summary)
 metaprogram_proportion_summary$Metaprogram <- rownames(metaprogram_proportion_summary)
 
 write_csv(metaprogram_proportion_summary, file.path(base_dir, 'Xenium_Metaprogram_proportion_summary.csv'))
-
