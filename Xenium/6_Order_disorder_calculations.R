@@ -99,13 +99,14 @@ spatial_coherence_df2
 # plot decreasing order metaprogram
 spatial_coherence_df$metaprogram <- reorder(spatial_coherence_df$metaprogram, spatial_coherence_df$scaled_spatial_coherence)
 
-ggplot(spatial_coherence_df, aes(x = metaprogram, y = scaled_spatial_coherence, color = sample, size = Frequency)) +
-  geom_point() +
-  labs(x = "Metaprogram",
-       y = "Spatial coherence") +
-  scale_color_manual(values = col_sample) +
-  stat_boxplot(geom = "errorbar", color = "black") +
-  stat_summary(fun = mean, colour = "black", geom = "point", shape = 8, size = 4, show.legend = FALSE) + 
+ggplot(spatial_coherence_df, aes(x = metaprogram, y = scaled_spatial_coherence)) +
+  geom_violin(width = 1, color = 'black') + 
+  #geom_boxplot(fatten = NULL, outlier.shape = NA, width = 0.5, color = 'black') +
+  geom_point(aes(group = sample, fill = sample), size = 2.5, shape = 21, stroke = 0, position = position_dodge(0.2)) +
+  stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..),
+               width = 0.4, size = 1, linetype = "solid") + 
+  scale_fill_manual(values = col_sample) +
+  labs(x = "Metaprogram", y = "Spatial coherence score") +
   theme_minimal() + theme(panel.border = element_blank(),
                           panel.grid.major = element_blank(),
                           panel.grid.minor = element_blank(),
@@ -115,20 +116,21 @@ ggplot(spatial_coherence_df, aes(x = metaprogram, y = scaled_spatial_coherence, 
                           axis.text.x = element_text(size=12, angle = 90, vjust = 0.5, hjust=1, colour="black"),
                           axis.text.y = element_text(size=12, colour="black"),
                           axis.title=element_text(size=12),
-                          plot.title = element_text(size=10, face="bold")) 
+                          plot.title = element_text(size=10, face="bold"))
 ggsave(file.path(output_dir, "1_spatial_coherence_by_metaprogram.pdf"), width=5, height=4)
 
 
 # plot decreasing order sample
 spatial_coherence_df$sample <- reorder(spatial_coherence_df$sample, spatial_coherence_df$scaled_spatial_coherence)
 
-ggplot(spatial_coherence_df, aes(x = sample, y = scaled_spatial_coherence, color = metaprogram, size = Frequency)) +
-  geom_point() +
-  labs(x = "Sample",
-       y = "Spatial coherence score") +
-  scale_color_manual(values = colors_metaprograms_ZFTA) +
-  stat_boxplot(geom = "errorbar", color = "black") +
-  stat_summary(fun = mean, colour = "black", geom = "point", shape = 8, size = 4, show.legend = FALSE) + 
+ggplot(spatial_coherence_df, aes(x = sample, y = scaled_spatial_coherence)) +
+  geom_violin(width = 1, color = 'black') + 
+ # geom_boxplot(fatten = NULL, outlier.shape = NA, width = 0.5, color = 'black')  +
+  geom_point(aes(group = metaprogram, fill = metaprogram), size = 2, shape = 21, stroke = 0, position = position_dodge(0.2)) +
+  stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..),
+               width = 0.4, size = 1, linetype = "solid") + 
+  scale_fill_manual(values = colors_metaprograms_ZFTA) +
+  labs(x = "Sample", y = "Spatial coherence score") +
   theme_minimal() + theme(panel.border = element_blank(),
                           panel.grid.major = element_blank(),
                           panel.grid.minor = element_blank(),
@@ -138,24 +140,32 @@ ggplot(spatial_coherence_df, aes(x = sample, y = scaled_spatial_coherence, color
                           axis.text.x = element_text(size=12, angle = 90, vjust = 0.5, hjust=1, colour="black"),
                           axis.text.y = element_text(size=12, colour="black"),
                           axis.title=element_text(size=12),
-                          plot.title = element_text(size=10, face="bold")) 
-ggsave(file.path(output_dir, "1_spatial_coherence_by_sample.pdf"), width=5, height=4)
+                          plot.title = element_text(size=10, face="bold"))
+ggsave(file.path(output_dir, "1_spatial_coherence_by_sample.pdf"), width=5, height=3)
 
 
 # plot malignant vs non-malignant coherence
+
+## remove columns for which we have only 1 data point available
+spatial_coherence_df <- spatial_coherence_df %>%
+  dplyr::filter(metaprogram != "Unassigned" & metaprogram != "Radial glia-like" & metaprogram != "Oligodendrocytes" & metaprogram != "Microglia")
+
+
+
 spatial_coherence_df2 <- spatial_coherence_df %>%
   dplyr::group_by(malignant, sample)  %>%
   dplyr::summarise(scaled_spatial_coherence = mean(scaled_spatial_coherence),
                    Frequency = mean(Frequency))
 
-ggplot(spatial_coherence_df2, aes(x = malignant, y = scaled_spatial_coherence, color = sample, size = Frequency)) +
-  geom_point() +
-  stat_boxplot(geom = "errorbar", color = "black") +
-  stat_summary(fun = mean, colour = "black", geom = "point", shape = 8, size = 4, show.legend = FALSE) + 
-  labs(x = "Metaprogram",
-       y = "Spatial coherence") +
-  scale_color_manual(values = col_sample) +
-  #geom_boxplot(width = 0.07) +
+ggplot(spatial_coherence_df2, aes(x = malignant, y = scaled_spatial_coherence)) +
+  geom_violin(width = 1, color = 'black') + 
+  #geom_boxplot(fatten = NULL, outlier.shape = NA, width = 0.7) + 
+  stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..),
+               width = 0.7, size = 1, linetype = "solid") + 
+  geom_point(aes(group = sample, fill = sample), size = 3, shape = 21, stroke = 0, position = position_dodge(0.2)) +
+  geom_line(aes(group = sample), position = position_dodge(0.2)) + 
+  labs(x = "Metaprogram", y = "Spatial coherence score") +
+  scale_fill_manual(values = col_sample) +
   theme_minimal() + theme(panel.border = element_blank(),
                           panel.grid.major = element_blank(),
                           panel.grid.minor = element_blank(),
@@ -165,8 +175,9 @@ ggplot(spatial_coherence_df2, aes(x = malignant, y = scaled_spatial_coherence, c
                           axis.text.x = element_text(size=12, angle = 90, vjust = 0.5, hjust=1, colour="black"),
                           axis.text.y = element_text(size=12, colour="black"),
                           axis.title=element_text(size=12),
-                          plot.title = element_text(size=10, face="bold")) 
-ggsave(file.path(output_dir, "3_spatial_coherence_by_malignant.pdf"), width=3, height=4.5)
+                          plot.title = element_text(size=10, face="bold")) + 
+  ggpubr::stat_compare_means(comparisons = list(c('Malignant', 'Non-malignant')), method = 't.test', label = "p.signif", size = 4)
+ggsave(file.path(output_dir, "3_spatial_coherence_by_malignant.pdf"), width=3.5, height=4)
 
 
 
@@ -177,14 +188,15 @@ spatial_coherence_df2 <- spatial_coherence_df %>%
     Frequency = mean(Frequency)) 
 write_csv(spatial_coherence_df2, file.path(output_dir, 'malignant_non_malignant.csv'))
 
-ggplot(spatial_coherence_df2, aes(x = malignant, y = scaled_spatial_coherence, color = metaprogram, size = Frequency)) +
-  geom_point() + 
-  stat_boxplot(geom = "errorbar", color = "black") +
-  stat_summary(fun = mean, colour = "black", geom = "point", shape = 8, size = 4, show.legend = FALSE) + 
-labs(x = "Metaprogram",
-       y = "Spatial coherence") +
-  scale_color_manual(values = colors_metaprograms_ZFTA) +
-  #geom_boxplot(width = 0.07) +
+ggplot(spatial_coherence_df2, aes(x = malignant, y = scaled_spatial_coherence)) +
+  geom_violin(width = 1, color = 'black') + 
+  #geom_boxplot(fatten = NULL, outlier.shape = NA, width = 0.7) + 
+  stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..),
+               width = 0.7, size = 1, linetype = "solid") + 
+  geom_point(aes(group = metaprogram, fill = metaprogram), size = 3, stroke = 0,  shape = 21, position = position_dodge(0.2)) +
+  #geom_line(aes(group = metaprogram), position = position_dodge(0.2)) + 
+  labs(x = "Metaprogram", y = "Spatial coherence score") +
+  scale_fill_manual(values = colors_metaprograms_ZFTA) +
   theme_minimal() + theme(panel.border = element_blank(),
                           panel.grid.major = element_blank(),
                           panel.grid.minor = element_blank(),
@@ -194,8 +206,9 @@ labs(x = "Metaprogram",
                           axis.text.x = element_text(size=12, angle = 90, vjust = 0.5, hjust=1, colour="black"),
                           axis.text.y = element_text(size=12, colour="black"),
                           axis.title=element_text(size=12),
-                          plot.title = element_text(size=10, face="bold")) 
-ggsave(file.path(output_dir, "3_spatial_coherence_by_malignant_metaprogram.pdf"), width=3.5, height=4.5)
+                          plot.title = element_text(size=10, face="bold")) + 
+  ggpubr::stat_compare_means(comparisons = list(c('Malignant', 'Non-malignant')), method = 't.test', label = "p.signif", size = 4)
+ggsave(file.path(output_dir, "3_spatial_coherence_by_malignant_metaprogram.pdf"), width=3.5, height=4)
 
 
 
