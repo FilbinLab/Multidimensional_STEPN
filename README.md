@@ -2,25 +2,36 @@
 
 
 1. sc/snRNA-seq Preprocessing
-2. Pseudobulk analysis (projections & plots)
-3. NMF Metaprograms (scripts for NMF generation & plots)
+2. Plots
+3. Pseudobulk analysis (projections & plots)
 4. Xenium (preprocessing, spatial coherence, niche, neighborhood enrichment, cellchat)
 5. Co-culture (preprocessing, analysis, plots)  
 
 
 
+## 1. sc/snRNA-seq Preprocessing
+Codes to process sc/snRNA-seq data from ST-EPN patient samples. Codes are ordered logically, from QC-filtering (`1-filtering.R`) to inferCNV to determine malignant/non-malignant cells (the code is different for fresh and frozen samples - `3a-infercnv_frozen_step1_part1.R`, `3b-infercnv_fresh_step1_part1.R`, `4a-infercnv_frozen_step2.R`, `4b-infercnv_fresh_step2.R`, `5a-infercnv_frozen_step3.R`, `5b-infercnv_fresh_step3.R`), to preparing counts for NMF (`6-prepare_nmf_counts.R` and `6b-prepare_nmf_counts_fresh.R`), to running NMF (`7-NMF_rank-forO2.R`) and visualizing NMF results (`8-NMF.Rmd`)
+
+Final datasets are cleaned up, annotated and reprocessed using `9_Cleanup_datasets.R` and `10_classification_malignant_normal.R`
+
+Code to display oncoprint of figure 1 is also there (`Oncoprint.R`)
 
 
-* **Samples used:** `4EP49, 3EP8, BT1743, 4EP51, 7EP35, 7EP41, 11EP22, 3EP54, 3EP67, 7EP1, 11EP8, 7EP9, 16EP8, 4EP53, MUV43R1, MUV43R2, MUV43R4, WEPN9, 4EP44, 9EP47, 9EP35, BT268, I128034, I128034R1, I128034R2, 1230717, 1599417, 2192118, RD050618, RD141019, RD251119, 4717EP17, FR0671, I050420, 4EP46, 9EP45, 11EP21, 3EP29`
+## 2. Plots
+Codes to plot most paper figures from ST-EPN patient samples
 
-* FASTQ files can be found in the following directory: `/labs/mfilbin/homes/biagi/PanCancer/Ependymoma`
+## 3. Pseudobulk analysis 
+Codes to plot Extended figure 3 and to plot developmental projections of Fig. 1f and Fig E2a. To prepare the reference datasets, the codes stored in the folder `Developmental_dataset_processing` are used.
 
-### **Code to reproduce manuscript analyses**
+## 4. Xenium
+The folder contains the following subfolders:
+`1-preprocessing`: to annotate Xenium cells with tumor cell states/types
+`2-plots`: to display spatial maps
+`3-neighborhood`: Python code to calculate cellular neighborhoods
+`4-spatial_coherence`: code to display the spatial coherence results
 
-Fig. 1: oncoplot summarizing the clinical information of the samples profiled by single-cell analysis
 
-
-## Coculture processing
+## 5.Co-culture
 Experiment to determine the cell state shifts between EP1NS cells cultures alone (monoculture) or with rat neurons and astrocytes (coculture).
 In total, 3x4 plates coculture and 1x4 plates monoculture were sequenced. 1x run of coculture was bad QC, and therefore removed.
 The remaining goodQC runs are stored under the following folders:
@@ -29,11 +40,5 @@ The remaining goodQC runs are stored under the following folders:
 231116 - CoCulture, 4 plates `/labs/mfilbin/homes/biagi/Demultiplexing/231116` 
 231103 - MonoCulture, 4 plates `/labs/mfilbin/homes/biagi/Demultiplexing/231103`
 
-
-**1. Demultiplexing.** Samples demultiplexed using standard code under Demultiplexing.
-
-**2. QC.** Script `1_qc.R` was used to remove low quality cells
-
-**3. Processing.** Script `2_Processing_coculture_only.R` used to create a Seurat object, score cells for metaprograms identified in frozen ZFTA-RELA patient cohort.
-
-**4. Plots.** Script `3_plots_Mono_co_culture_only.R` used to generate plots for final figures
+## 6.Preclinical_models
+Codes to visualize FIg E10a/b
