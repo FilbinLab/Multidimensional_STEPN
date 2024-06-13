@@ -23,8 +23,8 @@ library(SeuratObject)
 library(data.table)
 library(tidyverse)
 library(future)
-library(clustree)
-library(clusterProfiler)
+#library(clustree)
+#library(clusterProfiler)
 library(ggpubr)
 library(cowplot)
 library(ggrastr)
@@ -44,9 +44,14 @@ source(file.path(resource_dir, 'single_cell_preprocessing_helper_functions.R'))
 
 
 # Define color palettes  -----------------------------------
-col_model <- c( 'grey', 'red')
-col_cluster_label_transfer <- c("#F99E93FF","#96410EFF")
+colors_metaprograms<- c("gray30","#F99E93FF","#9E5E9BFF","#74ADD1FF",'#0F4F8B', "#ACD39EFF","#96410EFF", 'mistyrose1')
 
+names(colors_metaprograms) <- c("Cycling", "Neuroepithelial-like", "Radial-glia-like", 
+                          "Embryonic-neuronal-like", "Neuronal-like" ,"Ependymal-like", "MES-like", "Embryonic-like")
+
+
+col_model <- c('grey80', 'grey20', 'red')
+names(col_model) <- c('Patient', 'Monoculture', 'Coculture')
 
 # load Seurat object -----------------------------------
 EP1NS_combined <- readRDS(file.path(data_dir, "Mono_co_culture_merged.rds"))
@@ -54,54 +59,72 @@ EP1NS_combined <- readRDS(file.path(data_dir, "Mono_co_culture_merged.rds"))
 EP1NS_combined$sample <- factor(x = EP1NS_combined$sample, 
                                   levels = c("Monoculture", "Coculture"))
 # reorder label-transfer cluster order
-EP1NS_combined$SingleR.labels <- factor(x = EP1NS_combined$SingleR.labels, levels = c("ZFTA_Neuroepithelial_like", "ZFTA_MES_like")) 
+EP1NS_combined$Metaprogram <- factor(x = EP1NS_combined$Metaprogram, levels = c("Cycling", "Embryonic-like", "Neuroepithelial-like", "Radial-glia-like", 
+                                                                                "Embryonic-neuronal-like", "Neuronal-like"  ,"Ependymal-like", "MES-like")) 
+
+EP1NS_patient_combined <- readRDS(file.path(data_dir, "Mono_co_culture_patient_merged.rds"))
+
 ```
 
 # UMAP plots
 
 Plot UMAP colored by different metadata columns
 
-## By cluster
-```{r UMAP clusters, fig.width = 5, fig.height = 4, fig.align="center"}
-## by clusters
-Idents(EP1NS_combined) = 'seurat_clusters'
-DimPlot(EP1NS_combined, reduction = "umap", pt.size = 2)
-ggsave(file.path(plot_dir, "1_UMAP_clusters.pdf"), width=6, height=5)
-```
+
 ## By sample
 ```{r UMAP sample, fig.width = 5, fig.height = 4, fig.align="center"}
-## by sample
-DimPlot(EP1NS_combined, reduction = "umap", group.by = 'sample', pt.size = 2, cols = col_model)
-ggsave(file.path(plot_dir, "2_UMAP_model.pdf"), width=6, height=5)
+DimPlot(object = EP1NS_combined, 
+        reduction = 'umap', 
+        group.by = "sample", 
+        pt.size = 0.5, 
+        shuffle = TRUE, 
+        label = TRUE,
+        label.size = 0,
+        cols = col_model
+        ) + 
+  labs(title = 'EP1NS', subtitle = 'n = 919 cells') 
+ggsave(file.path(plot_dir, "2_umap_sample.pdf"), width=5, height=4)
 
 ```  
 
-## By label transfer
-```{r UMAP singleR, fig.width = 6, fig.height = 4, fig.align="center"}
-## by SingleR
-DimPlot(EP1NS_combined, reduction = "umap", group.by = 'SingleR.labels', pt.size = 2, cols = col_cluster_label_transfer)
-ggsave(file.path(plot_dir, "3_UMAP_label_transfer.pdf"), width=8, height=5)
+## By Metaprogram
+```{r UMAP metaprogram, fig.width = 6, fig.height = 4, fig.align="center"}
+DimPlot(object = EP1NS_combined, 
+        reduction = 'umap', 
+        group.by = "Metaprogram", 
+        pt.size = 0.5, 
+        shuffle = TRUE, 
+        label = TRUE,
+        label.size = 0,
+        cols = colors_metaprograms
+        ) + 
+  labs(title = 'EP1NS', subtitle = 'n = 919 cells') 
+ggsave(file.path(plot_dir, "3_umap_metaprograms.pdf"), width=6, height=4)
 ```  
 
 ## By scores
-```{r UMAP scores, fig.width = 9, fig.height = 5, fig.align="center"}
+```{r UMAP scores, fig.width = 9, fig.height = 6, fig.align="center"}
 ## by patient scores
-scores <- c('NPC_like', 'Mesenchymal', 'Radial_glia', 'Ependymal', 'Neuroepithelial', 'Cycling')
+scores <- c("Neuroepithelial-like", "MES-like","Ependymal-like","Radial-glia-like","Cycling", "Embryonic-neuronal-like", "Neuronal-like", "Embryonic-like")
 p <- FeaturePlot(EP1NS_combined, features = scores, reduction = "umap", combine = FALSE, pt.size = 1)
 
 for(i in 1:length(p)) {
   p[[i]] <- p[[i]] + NoAxes() + scale_colour_distiller(palette="RdBu")
   }
 cowplot::plot_grid(plotlist = p, ncol=3)
-ggsave(file.path(plot_dir, "4_UMAP_scores.pdf"), width=9, height=5, dpi=300)
+ggsave(file.path(plot_dir, "4_umap_scores.pdf"), width=9, height=6)
+```   
+
+```{r UMAP scores2, fig.width = 10, fig.height = 3, fig.align="center"}
+plot_grid(p[[1]], p[[7]], p[[3]], ncol = 3) 
+ggsave(file.path(plot_dir, "4_umap_scores_selected.pdf"), width=10, height=3, dpi=300)
 ```   
 
 # Violin plots
 Plot Violin plots of scores 
 
-```{r Vln plots, fig.width = 8, fig.height = 8, fig.align="center"}
-scores <- c('NPC_like', 'Mesenchymal', 'Radial_glia', 'Ependymal', 'Neuroepithelial', 'Cycling')
-titles <- c('NPC-like', 'Mesenchymal', 'Radial glia-like', 'Ependymal-like', 'Neuroepithelial-like', 'Cycling')
+```{r Vln plots, fig.width = 10, fig.height = 8, fig.align="center"}
+titles <- scores
 
 p <- VlnPlot(EP1NS_combined, features = scores, group.by = 'sample', combine = FALSE, pt.size=0, cols = col_model) 
 
@@ -110,7 +133,7 @@ for(i in 1:length(p)) {
       labs (y='Module score, AU', x='', title = titles[[i]]) + 
       scale_fill_manual(values = col_model) + 
       geom_boxplot(outlier.shape=NA, width=0.1, fill="white") +
-      stat_compare_means(aes(label = after_stat(p.signif)), 
+      stat_compare_means(aes(label = after_stat(p.format)), 
                          method = 't.test', 
                          size = 5, 
                          label.y.npc = 0.95, 
@@ -118,15 +141,15 @@ for(i in 1:length(p)) {
                          ) + NoLegend() +
       theme_vln
   }
-plot_grid(plotlist = p, ncol=3)
-ggsave(file.path(plot_dir, "5_VlnPlot_scores.pdf"), width=8, height=8)
+plot_grid(plotlist = p, ncol=4)
+ggsave(file.path(plot_dir, "5_VlnPlot_scores.pdf"), width=10, height=8)
 ```
 
 Plot Violin plots of selected scores 
 
-```{r Vln plots 2, fig.width = 7, fig.height = 4, fig.align="center"}
-plot_grid(p[[5]], p[[1]], p[[4]], ncol = 3) 
-ggsave(file.path(plot_dir, "6_VlnPlot_scores_selected.pdf"), width=7, height=4)
+```{r Vln plots 2, fig.width = 5, fig.height = 3, fig.align="center"}
+plot_grid(p[[1]], p[[7]], p[[3]], ncol = 3) 
+ggsave(file.path(plot_dir, "6_VlnPlot_scores_selected.pdf"), width=6, height=4)
 ```
 
 # Violin plots
@@ -142,7 +165,7 @@ for(i in 1:length(p)) {
       labs (y='Gene expression', x='') + 
       scale_fill_manual(values = col_model) + 
       geom_boxplot(outlier.shape=NA, width=0.1, fill="white") +
-      stat_compare_means(aes(label = after_stat(p.signif)), 
+      stat_compare_means(aes(label = after_stat(p.format)), 
                          method = 't.test', 
                          label.x.npc = 0.5, 
                          label.y.npc = 0.92, 
@@ -158,7 +181,7 @@ ggsave(file.path(plot_dir, "7_VlnPlot_markers.pdf"), width=12, height=3)
 Plot Violin plots of markers for Varun
 
 ```{r Vln plot markers2, fig.width = 5, fig.height = 3, fig.align="center"}
-markers <- c('VIM', 'DCX', 'CCDC40')
+markers <- c('VIM', 'DCX', 'GFAP')
 
 p <- VlnPlot(EP1NS_combined, features = markers, group.by = 'sample', combine = FALSE, pt.size=0, cols = col_model) 
 
@@ -167,7 +190,7 @@ for(i in 1:length(p)) {
       labs (y='Gene expression', x='') + 
       scale_fill_manual(values = col_model) + 
       geom_boxplot(outlier.shape=NA, width=0.1, fill="white") +
-      stat_compare_means(aes(label = after_stat(p.signif)), 
+      stat_compare_means(aes(label = after_stat(p.format)), 
                          method = 't.test', 
                          label.x.npc = 0.5, 
                          label.y.npc = 0.92, 
@@ -177,7 +200,7 @@ for(i in 1:length(p)) {
       NoLegend()
   }
 plot_grid(plotlist = p, ncol=3)
-ggsave(file.path(plot_dir, "7_VlnPlot_markers2.pdf"), width=5, height=3)
+ggsave(file.path(plot_dir, "7_VlnPlot_markers2.pdf"), width=5, height=3.5)
 ```
 
 # Barplot 
@@ -185,7 +208,7 @@ ggsave(file.path(plot_dir, "7_VlnPlot_markers2.pdf"), width=5, height=3)
 Barplot of label transfer
 ```{r barplot singleR, fig.width = 5, fig.height = 4, fig.align="center"}
 ## Bar plot
-plot_bar(EP1NS_combined, EP1NS_combined$sample, EP1NS_combined$SingleR.labels, col = col_cluster_label_transfer) 
+plot_bar(EP1NS_combined, EP1NS_combined$sample, EP1NS_combined$Metaprogram, col = colors_metaprograms) 
 ggsave(file.path(plot_dir, "8_Barplot_label_transfer_sample.pdf"), width=5, height=4)
 ```
 
@@ -200,32 +223,112 @@ ggsave(file.path(plot_dir, "8b_Barplot_cycling.pdf"), width=4, height=4)
 # Cell state plot
 
 Plot distribution of samples on the hierarchy plot
-```{r cellstate plot, fig.width = 9, fig.height = 4, fig.align="center"}
-## Cell state plot
-  # define relative meta module scores (like in Tirosh)
-  y <- ifelse(EP1NS_combined$Ependymal > EP1NS_combined$NPC_like, EP1NS_combined$Neuroepithelial - EP1NS_combined$Ependymal, EP1NS_combined$Neuroepithelial - EP1NS_combined$NPC_like)
-  x <- EP1NS_combined$Ependymal - EP1NS_combined$NPC_like
-  
-  hierarchy <- cbind(x,y)
-  hierarchy <- as.data.frame(hierarchy)
-  hierarchy$sample <- EP1NS_combined$sample
-  
-  ggplot(hierarchy, aes(x = x, y = y)) +
-  geom_point(aes(color = sample), size = 1) +
-    scale_colour_manual(values= col_model) +
-    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") + 
-    scale_x_continuous(limits = c(-0.5, 0.5)) + 
-    scale_y_continuous(limits = c(-1, 2)) + 
-    geom_text(aes(x=-0.3, label="NPC-like", y=-0.7), size=4) +
-    geom_text(aes(x=0.3, label="Ependymal-like", y=-0.7), size=4) +
-    geom_text(aes(x=0.15, label="Early-progenitor-like", y=2), size=4, hjust=1, colour = 'black') + 
-    theme_cellstate_plot + 
-    labs(x = 'NPC-like <------> Ependymal-like', y = 'Neuroepithelial-like score') +
-    facet_wrap(~sample,
-               ncol = 2,
-                scales = "free_y") 
-  ggsave(file.path(plot_dir, "9_CellState_plot_NMF.pdf"), width=9, height=4)
+
+```{r cellstate plot colored by subtype, fig.width = 6, fig.height = 4, fig.align="center"}
+x1 = "Neuroepithelial-like"
+x2 = "Embryonic-like"
+y1 = "Neuronal-like"
+y2 = "Ependymal-like"
+
+group.by="sample"
+sample=EP1NS_combined
+variables_to_retrieve <- c(x1, x2, y1,y2)
+
+# And store them as a tibble.
+scores <- sample@meta.data[, variables_to_retrieve]
+# Shuffle the cells so that we accomplish a random plotting, not sample by sample.
+
+# Compute Y axis values.
+d <- apply(scores, 1, function(x){max(x[c(x1, x2)]) - max(x[c(y1, y2)])})
+
+# Compute X axis values.
+x <- vapply(seq_along(d), function(x) {
+  if (d[x] > 0) {
+    d <- log2(abs(scores[x, x1] - scores[x, x2]) + 1)
+    ifelse(scores[x, x1] < scores[x, x2], d, -d)
+  } else {
+    d <- log2(abs(scores[x, y1] - scores[x, y2]) + 1)
+    ifelse(scores[x, y1] < scores[x, y2], d, -d)
+  }
+}, FUN.VALUE = numeric(1))
+
+names(x) <- rownames(scores)
+
+# Plot.
+df_E <- data.frame(row.names = rownames(scores))
+df_E[["set_x"]] <- x
+df_E[["set_y"]] <- d
+df_E[["group.by"]] <- sample@meta.data[, group.by]
+df_E[["subtype"]] <- EP1NS_combined$sample
+
+
+ggplot(df_E,aes(x=set_x,
+              y=set_y,
+              col=group.by))+
+  geom_point(size=2)+
+  scale_color_manual(values=col_model)+
+   theme_cellstate_plot + 
+  labs(x = 'Relative meta-module score', y = 'Relative meta-module score', title = 'EP1NS cellular hierarchy', subtitle = 'n = 919 cells') +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") +
+  xlim(-2, 1) + ylim(-1, 3)
+
+ggsave(file.path(plot_dir, "9_CellState_plot_4way_Metaprograms.pdf"), width=5.5, height=4)
 
 ```
-`
 
+
+# Cell state plot with patients
+
+Plot distribution of samples on the hierarchy plot
+
+```{r cellstate plot colored by subtype, fig.width = 6, fig.height = 4, fig.align="center"}
+x1 = "Neuroepithelial-like"
+x2 = "Embryonic-like"
+y1 = "Neuronal-like"
+y2 = "Ependymal-like"
+
+group.by="model"
+sample=EP1NS_patient_combined
+variables_to_retrieve <- c(x1, x2, y1,y2)
+
+# And store them as a tibble.
+scores <- sample@meta.data[, variables_to_retrieve]
+# Shuffle the cells so that we accomplish a random plotting, not sample by sample.
+
+# Compute Y axis values.
+d <- apply(scores, 1, function(x){max(x[c(x1, x2)]) - max(x[c(y1, y2)])})
+
+# Compute X axis values.
+x <- vapply(seq_along(d), function(x) {
+  if (d[x] > 0) {
+    d <- log2(abs(scores[x, x1] - scores[x, x2]) + 1)
+    ifelse(scores[x, x1] < scores[x, x2], d, -d)
+  } else {
+    d <- log2(abs(scores[x, y1] - scores[x, y2]) + 1)
+    ifelse(scores[x, y1] < scores[x, y2], d, -d)
+  }
+}, FUN.VALUE = numeric(1))
+
+names(x) <- rownames(scores)
+
+# Plot.
+df_E <- data.frame(row.names = rownames(scores))
+df_E[["set_x"]] <- x
+df_E[["set_y"]] <- d
+df_E[["group.by"]] <- sample@meta.data[, group.by]
+df_E[["model"]] <- EP1NS_patient_combined$model
+
+
+ggplot(df_E,aes(x=set_x,
+              y=set_y,
+              col=group.by))+
+  geom_point(size=1.5)+
+  scale_color_manual(values=col_model)+
+   theme_cellstate_plot + 
+  labs(x = 'Relative meta-module score', y = 'Relative meta-module score', title = 'EP1NS cellular hierarchy', subtitle = 'n = 919 cells') +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") 
+  #xlim(-2, 1) + ylim(-1, 3)
+
+ggsave(file.path(plot_dir, "9_CellState_plot_4way_Metaprograms_patients.pdf"), width=5.5, height=4)
+
+```

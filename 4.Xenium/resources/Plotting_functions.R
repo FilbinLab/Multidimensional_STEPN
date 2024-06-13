@@ -1,45 +1,53 @@
 options(future.globals.maxSize = +Inf)
 
 # Color palettes -------------------------------------
-colors_groups <- c("gray30","#F99E93FF","#9E5E9BFF","#74ADD1FF","#ACD39EFF","#96410EFF", 'grey80',
-                   '#BDA14DFF', '#3EBCB6FF', '#0169C4FF', '#153460FF', '#D5114EFF' ,'#A56EB6FF' ,'#4B1C57FF')
 
-names(colors_groups) <- c("Cycling", "Neuroepithelial-like", "Radial glia-like", 
-                          "NPC-like" ,"Ependymal-like", "Mesenchymal", "Unassigned", 
-                          "T-cell", "Myeloid", "Microglia", "Endothelial", "Neurons", "VLMCs", "Oligodendrocytes")
+colors_metaprograms_Xenium <- c("gray30","#F99E93FF","#9E5E9BFF",
+                                '#0F4F8B',"#ACD39EFF","#96410EFF",'grey80', 
+                                '#FFF087FF',  'turquoise3', 'turquoise2', 'violetred3', 'violetred2', '#000000FF')
 
-colors_immune <- c(rep('grey95', 7), '#BDA14DFF', '#3EBCB6FF','#0169C4FF', rep('grey95', 4))
-
-names(colors_immune) <- c("Cycling", "Neuroepithelial-like", "Radial glia-like", 
-                          "NPC-like" ,"Ependymal-like", "Mesenchymal", "Unassigned", 
-                          "T-cell", "Myeloid", "Microglia", "Endothelial", "Neurons", "VLMCs", "Oligodendrocytes")
+names(colors_metaprograms_Xenium) <- c("Cycling", "Neuroepithelial-like", "Radial glia-like", 
+                                       "Neuronal-like" ,"Ependymal-like", "Mesenchymal", "Unassigned", 
+                                       "T-cell", "Myeloid", "Microglia", "Endothelial", "VLMCs",  "Oligodendrocytes")
 
 
-colors_mesen <- c(rep('grey95', 5),"#96410EFF", rep('grey95', 8))
-
-names(colors_mesen) <- c("Cycling", "Neuroepithelial-like", "Radial glia-like", 
-                          "NPC-like" ,"Ependymal-like", "Mesenchymal", "Unassigned", 
-                          "T-cell", "Myeloid", "Microglia", "Endothelial", "Neurons", "VLMCs", "Oligodendrocytes")
+colors_to_use_metaprograms <- structure(colors_metaprograms_Xenium,
+                           names = names(colors_metaprograms_Xenium))
 
 
-colors_vascular <- c(rep('grey95', 10), '#153460FF', 'grey95' ,'#A56EB6FF' ,'grey95')
+colors_metaprograms_Xenium_grouped <- c("gray30","#F99E93FF","#9E5E9BFF",
+                                          '#0F4F8B',"#ACD39EFF","#96410EFF",'grey80', 
+                                          'turquoise3', 'violetred3',  '#000000FF')
 
-names(colors_vascular) <- c("Cycling", "Neuroepithelial-like", "Radial glia-like", 
-                          "NPC-like" ,"Ependymal-like", "Mesenchymal", "Unassigned", 
-                          "T-cell", "Myeloid", "Microglia", "Endothelial", "Neurons", "VLMCs", "Oligodendrocytes")
+names(colors_metaprograms_Xenium_grouped) <- c("Cycling", "Neuroepithelial-like", "Radial glia-like", 
+                                                 "Neuronal-like" ,"Ependymal-like", "Mesenchymal", "Unassigned", 
+                                                 "Immune", "Vascular", "Oligodendrocytes")
 
 
 
-colors_groups_barplot <- c("gray30","#F99E93FF","#9E5E9BFF","#74ADD1FF","#ACD39EFF","#96410EFF", 'grey80',
-                           '#BDA14DFF', '#3EBCB6FF', '#0169C4FF', '#153460FF', '#D5114EFF' ,'#A56EB6FF' ,'#4B1C57FF', 
-                   'grey80','grey80','grey80','grey80','grey80','grey80','grey80')
-names(colors_groups_barplot) <- c("Cycling", "Neuroepithelial-like", "Radial glia-like", 
-                                  "NPC-like" ,"Ependymal-like", "Mesenchymal", "Unassigned", 
-                                  "T-cell", "Myeloid", "Microglia", "Endothelial", "Neurons", "VLMCs", "Oligodendrocytes",
-                          '12', '13', '9', '10', '11', '14', '15')
+colors_recurrent_metaprograms_Xenium <- c("gray30","#F99E93FF","#9E5E9BFF",
+                                '#0F4F8B',"#ACD39EFF","#96410EFF",'grey80', 
+                                  'turquoise3', 'violetred3',  '#000000FF')
+
+names(colors_recurrent_metaprograms_Xenium) <- c("Cycling", "Neuroepithelial-like", "Radial glia-like", 
+                                       "Neuronal-like" ,"Ependymal-like", "Mesenchymal", "Unassigned", 
+                                       "Immune", "Vessel", "Oligodendrocytes")
+
+
+
+
+
+
+colors_groups_barplot <- c(colors_metaprograms_Xenium,
+                           'grey80','grey80','grey80','grey80','grey80','grey80','grey80')
+names(colors_groups_barplot) <- c(names(colors_metaprograms_Xenium),
+                                  '12', '13', '9', '10', '11', '14', '15')
 
 
 col_niches <- c('#58148e', '#15a2a2', '#ea515f','#d0a03b','#0466c8')
+
+colors_to_use_niches <- structure(col_niches,
+                                        names = c('1', '2', '3', '4', '5'))
 
 
 col_normal_malignant <- c('#FFC72CFF', '#582C83FF')
@@ -63,4 +71,21 @@ plot_bar <- function(seurat_obj, x_var, y_var, colors){
           axis.title=element_text(size=14),
           legend.text = element_text(size = 14),
           legend.title = element_blank()) 
+}
+
+seurat_theme <- function(){
+  theme_bw() +
+    theme(panel.background = element_rect(colour = "black", size=0.1),
+          plot.title = element_text(hjust = 0.5, angle = 0, size = 15, face = "bold", vjust = 1),
+          axis.ticks.length=unit(.2, "cm"), axis.text = element_text(size=11),
+          panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+}
+
+
+
+cell_fun = function(j, i, x, y, width, height, fill) {
+  grid::grid.rect(x = x, y = y, width = width *0.99, 
+                  height = height *0.99,
+                  gp = grid::gpar(col = "grey", 
+                                  fill = fill, lty = 1, lwd = 0.5))
 }

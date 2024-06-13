@@ -1,0 +1,283 @@
+---
+title: "Gene ontology of differentially expressed genes across ST-EPN clusters"
+author: "Sara Danielli"
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+  html_notebook:
+    toc: yes
+    toc_float: yes
+---
+
+```{r, setup, include = FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = TRUE, cache = TRUE, warning = FALSE, comment = FALSE)
+```
+
+```{r message=FALSE, warning=FALSE}
+# Load packages -----------------------------------
+library(dplyr)
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(SeuratObject)
+library(data.table)
+library(tidyverse)
+library(future)
+library(ggpubr)
+library(cowplot)
+library(ggrastr)
+library(enrichplot)
+library(msigdbr)
+library(qs)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(SeuratWrappers)
+library(ggrepel)
+
+# Organize environment  -----------------------------------
+base_dir <- "/Users/sdaniell/Dropbox (Partners HealthCare)/Sara Danielli/Project/Ependymoma/11 - Plots scRNAseq"
+resource_dir <- file.path(base_dir, 'scripts/resources')
+
+source(file.path(resource_dir, 'Plot_style_v2.R'))
+
+plot_dir <- file.path(base_dir, "analysis/plots/pseudobulk")
+if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
+
+
+# Define color palettes  -----------------------------------
+colors_metaprograms<- c("gray30","#F99E93FF","#9E5E9BFF","#74ADD1FF",'#0F4F8B', "#ACD39EFF","#96410EFF", 'mistyrose1')
+
+names(colors_metaprograms) <- c("Cycling", "Neuroepithelial-like", "Radial-glia-like", 
+                                "Embryonic-neuronal-like", "Neuronal-like" ,"Ependymal-like", "MES-like", "Embryonic-like")
+
+
+# load Seurat object -----------------------------------
+seurat_obj <- qread(file = file.path(base_dir, "data/patient/seurat_obj_ST_combined_malig_annotated.qs"))
+```
+
+# Comparison 1: ZFTA-Cluster 3 vs ZFTA-RELA + ZFTA-Cluster 1
+```{r subset, message=FALSE, warning=FALSE}
+# remove unwanted clusters
+Idents(seurat_obj) <- 'Subtype'
+seurat_obj <- subset(seurat_obj, idents = c('ST-YAP1', 'ZFTA-Cluster 2', 'ZFTA-Cluster 4'), invert = T)
+
+# group cluster 1 abd canonical ZFTA-RELA tumors together 
+seurat_obj[['ZFTA_subtype']] <- ifelse(seurat_obj$Subtype %in% c("ZFTA-RELA", "ZFTA-Cluster 1"), "ZFTA-canonical",  "ZFTA-Cluster 3")
+
+plot_dir <- file.path(base_dir, "analysis/plots/pseudobulk/Cluster3_vs_ZFTARELA_Canonical1")
+if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
+
+```
+
+
+# Identify differentially expressed genes
+```{r genes, message=FALSE, warning=FALSE}
+Idents(seurat_obj) <- 'ZFTA_subtype'
+
+markers <- RunPrestoAll(
+  seurat_obj,
+  #test.use = "MAST",
+  logfc.threshold = 0.05,
+  min.pct = 0.15,
+  verbose = TRUE)
+write.csv(markers, file.path(plot_dir, "1_markers_canonical_vs_noncanonical.csv"))
+  
+  markers2 <- markers %>% 
+    filter(cluster %in% c("ZFTA-Cluster 3")) %>%
+    filter(p_val_adj < 0.05) %>%
+    group_by(cluster) %>%
+    arrange(-avg_log2FC, .by_group = T)
+  
+```
+
+### Exploring the differentially expressed genes
+
+```{r volcano, fig.width =6, fig.height = 4, fig.align="center"}
+ # Plot volcano plot of DEGs colored by significance
+   # create new column that contains the information about whether a gene is above FC and below P signif.
+   markers2 <- markers2 %>%
+     mutate(
+       color = case_when(
+         avg_log2FC > 1 & p_val_adj < 1e-05 ~ 'upregulated',
+         avg_log2FC < -1 & p_val_adj < 1e-05 ~ 'downregulated'
+       )
+     )
+   
+ col_volcano <- c( 'grey90', "#A8554EFF", "#5D74A5FF")
+ names(col_volcano) <- c('NA', 'upregulated', "downregulated")
+ 
+ ggplot(markers2, aes(avg_log2FC, -log(p_val_adj,10))) +
+   geom_point(aes(color = ifelse(is.na(color), "NA", color))) +
+   xlab(expression("Log"[2]*" fold change")) + 
+   ylab(expression("-log"[10]*"P")) +
+   geom_text_repel(data = subset(markers2, !is.na(color)), 
+                   aes(label = gene), box.padding = 0.2,
+                   point.padding = 0.2, segment.alpha = 1, size = 3) +
+   xlab(expression("Log"[2]*"fold change")) + 
+   scale_color_manual(values = col_volcano) +  
+   geom_vline(xintercept = -1, linetype="dotted") + 
+   geom_vline(xintercept = 1, linetype="dotted") + 
+   geom_hline(yintercept = -log(1e-05,10), linetype="dotted") + 
+   theme_cellstate_plot +
+   xlim(c(-6, 6)) +
+   labs(color = 'Gene')
+  ggsave(file.path(plot_dir, "2_Volcano_plot_cluster3_vs_clu1_ZR.pdf"), width=6, height=4)
+
+```
+# Perform overrrepresentation analysis 
+
+
+# Perform over-representation analysis of markers upregulated in cluster of interest
+```{r GO up, fig.width =6, fig.height = 4, fig.align="center"}
+markers <- markers2 |>
+  # Positive fold changes
+  dplyr::filter(avg_log2FC > 1) |>
+  # Significant p values
+  dplyr::filter(p_val_adj < 1e-05) |>
+  # Take the "top 300" when ordering by FDR (smallest FDR values)
+  dplyr::slice_min(order_by = -avg_log2FC, n = 300) |>
+  # Extract a vector of the gene symbols
+  dplyr::pull(gene)
+
+
+go_ora_results <- enrichGO(gene = markers,  # Top 300 genes
+                           #universe = background_set,  # Background genes
+                           keyType = "SYMBOL",  # Our genes are gene symbols
+                           OrgDb = org.Hs.eg.db,  # Supports conversion, if needed
+                           ont = "BP",  # Biological process
+                           pAdjustMethod = "BH",  # FDR
+                           pvalueCutoff = 0.05) 
+
+go_result_df <- data.frame(go_ora_results@result)
+write.csv(go_result_df, file.path(plot_dir, "3_enrichGO_cluster3.csv"))
+
+
+go_result_df <- go_result_df |>
+  dplyr::filter(p.adjust < 0.01)
+write.csv(go_result_df, file.path(plot_dir, "4_enrichGO_Cluster3_pval_01.csv"))
+
+# Dotplot
+go_ora_results %>% filter(p.adjust < 0.05) %>%
+  ggplot(showCategory = 10,
+         aes(GeneRatio, forcats::fct_reorder(Description, GeneRatio))) + 
+  geom_segment(aes(xend=0, yend = Description)) +
+  geom_point(aes(color=p.adjust, size = Count)) +
+  scale_color_viridis_c(guide=guide_colorbar(reverse=TRUE)) +
+  scale_size_continuous(range=c(1, 7)) +
+  theme_minimal() + 
+  paletteer::scale_colour_paletteer_c("viridis::mako", direction = -1) +
+  xlab("Gene Ratio") +
+  ylab(NULL) + 
+  ggtitle("GO Enrichment of Cluster 3")+
+  theme(panel.background = element_blank(),  # Remove background
+        axis.line = element_line(color = "black"),  # Add axes lines
+        panel.grid.major = element_blank(),  # Remove major gridlines
+        panel.grid.minor = element_blank(),  # Remove minor gridlines
+        axis.text = element_text(color = "black"),  # Change axis text color
+        axis.title.y = element_text(color = "black"))  # Change y-axis title color
+ggsave(file.path(plot_dir, "5_Dotplot_cluster3.pdf"), width=6, height=3)
+```
+
+
+
+
+# Perform over-representation analysis of markers downregulated in cluster of interest
+```{r GO down, fig.width =6, fig.height = 4, fig.align="center"}
+markers_down <- markers2 |>
+  # Positive fold changes
+  dplyr::filter(avg_log2FC < -1) |>
+  # Significant p values
+  dplyr::filter(p_val_adj < 1e-05) |>
+  # Take the "top 300" when ordering by FDR (smallest FDR values)
+  dplyr::slice_min(order_by = avg_log2FC, n = 300) |>
+  # Extract a vector of the gene symbols
+  dplyr::pull(gene)
+
+go_ora_results_down <- enrichGO(gene = markers_down,  # Top 300 genes
+                                #universe = background_set,  # Background genes
+                                keyType = "SYMBOL",  # Our genes are gene symbols
+                                OrgDb = org.Hs.eg.db,  # Supports conversion, if needed
+                                ont = "BP",  # Biological process
+                                pAdjustMethod = "BH",  # FDR
+                                pvalueCutoff = 0.05) 
+
+go_result_df_down <- data.frame(go_ora_results_down@result)
+write.csv(go_result_df_down, file.path(plot_dir, "6_enrichGO_canonical.csv"))
+
+
+go_result_df_down <- go_result_df_down |>
+  dplyr::filter(p.adjust < 0.01)
+write.csv(go_result_df_down, file.path(plot_dir, "7_enrichGO_canonical_pval_01.csv"))
+
+
+go_ora_results_down %>% filter(p.adjust < 0.05) %>%
+  ggplot(showCategory = 10,
+         aes(GeneRatio, forcats::fct_reorder(Description, GeneRatio))) + 
+  geom_segment(aes(xend=0, yend = Description)) +
+  geom_point(aes(color=p.adjust, size = Count)) +
+  scale_color_viridis_c(guide=guide_colorbar(reverse=TRUE)) +
+  scale_size_continuous(range=c(1, 7)) +
+  theme_minimal() + 
+  paletteer::scale_colour_paletteer_c("viridis::mako", direction = -1) +
+  xlab("Gene Ratio") +
+  ylab(NULL) + 
+  ggtitle("GO Enrichment of down-regulated genes")+
+  theme(panel.background = element_blank(),  # Remove background
+        axis.line = element_line(color = "black"),  # Add axes lines
+        panel.grid.major = element_blank(),  # Remove major gridlines
+        panel.grid.minor = element_blank(),  # Remove minor gridlines
+        axis.text = element_text(color = "black"),  # Change axis text color
+        axis.title.y = element_text(color = "black"))  # Change y-axis title color
+ggsave(file.path(plot_dir, "8_Dotplot_canonical.pdf"), width=9, height=3)
+
+
+```
+
+
+
+
+
+#Combine over-representation analysis results
+```{r combined , fig.width =7, fig.height = 8, fig.align="center"}
+mlist<-list(go_ora_results_down, go_ora_results)
+names(mlist)<-c("ZFTA-RELA/ZFTA-Cluster 1", "ZFTA-Cluster 3")
+mresult<-merge_result(mlist)
+
+dotplot(mresult,showCategory=10) 
+ggsave(file.path(plot_dir, "9_Dotplot_GO.pdf"), width=7, height=8)
+```
+
+```{r lollipop combined, fig.width =9, fig.height = 6, fig.align="center"}
+mresult %>% filter(p.adjust < 0.05) %>%
+ ggplot(showCategory = 10, aes(GeneRatio, forcats::fct_reorder(Description, GeneRatio))) + 
+  facet_grid(~Cluster, scales="free_y") +
+  geom_segment(aes(xend=0, yend = Description)) +
+  geom_point(aes(color=p.adjust, size = Count)) +
+  scale_color_viridis_c(guide=guide_colorbar(reverse=TRUE)) +
+  scale_size_continuous(range=c(1, 7)) +
+  theme_minimal() + 
+  paletteer::scale_colour_paletteer_c("viridis::mako", direction = -1) +
+  xlab("Gene Ratio") +
+  ylab(NULL) + 
+  theme(panel.background = element_blank(),  # Remove background
+        axis.line = element_line(color = "black"),  # Add axes lines
+        panel.grid.major = element_blank(),  # Remove major gridlines
+        panel.grid.minor = element_blank(),  # Remove minor gridlines
+        axis.text = element_text(color = "black"),  # Change axis text color
+        axis.title.y = element_text(color = "black"))  # Change y-axis title color
+ggsave(file.path(plot_dir, "10_LolliPlot_combined.pdf"), width=9, height=5)
+
+
+```
+
+
+## Print session info
+
+```{r session info}
+sessionInfo()
+
+
+

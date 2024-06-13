@@ -80,7 +80,7 @@ markers_NMF_30 <- lapply(markers_NMF, head, 30)
 
 
 # Find marker genes
-```{r nr_cells}
+```{r FIndmarkers}
 # Find Markers -----------------------------------
 Idents(seurat_obj_mal) <- 'Metaprogram'
 markers <- FindAllMarkers(seurat_obj_mal, 
@@ -107,9 +107,9 @@ write.xlsx(seurat_obj_mal_table, file.path(plot_dir, "0_scRNAseq_details_STEPN.x
 ```
 
 
-# tSNE Plot of frozen samples
+# UMAP Plot 
 ## harmony-corrected
-```{r UMAP corrected frozen, fig.width = 5, fig.height = 4, fig.align="center"}
+```{r UMAP , fig.width = 5, fig.height = 4, fig.align="center"}
 DimPlot(object = seurat_obj_mal, 
         reduction = 'umap.harmony', 
         group.by = "Subtype", 
@@ -155,7 +155,7 @@ ggsave(file.path(plot_dir, '1_umap_harmony_metaprogram_sampleID.pdf'), width = 7
 
 
 ## uncorrected
-```{r UMAP corrected frozen, fig.width = 6, fig.height = 4, fig.align="center"}
+```{r UMAP uncorrected, fig.width = 6, fig.height = 4, fig.align="center"}
 DimPlot(object = seurat_obj_mal, 
         reduction = 'umap.unintegrated', 
         group.by = "Subtype", 
@@ -261,7 +261,7 @@ df_E[["subtype"]] <- seurat_obj_mal$Subtype
 colors_metaprograms<- c("gray30","#F99E93FF","#9E5E9BFF","#74ADD1FF",'#0F4F8B', "#ACD39EFF","#96410EFF", 'mistyrose1')
 
 names(colors_metaprograms) <- c("Cycling", "Neuroepithelial-like", "Radial-glia-like", 
-                          "Embryonic/neuronal-like", "Neuronal-like" ,"Ependymal-like", "MES-like", "Embryonic-like")
+                          "Embryonic-neuronal-like", "Neuronal-like" ,"Ependymal-like", "MES-like", "Embryonic-like")
 
 ggplot(df_E,aes(x=set_x,
               y=set_y,

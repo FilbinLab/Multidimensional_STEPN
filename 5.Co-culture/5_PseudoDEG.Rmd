@@ -1,0 +1,592 @@
+---
+title: "Pseudo DEG co-culture vs no mono-culture EP1NS"
+author: "Sara Danielli"
+date: '`r format(Sys.time(), "Last modified: %b %d %Y")`'
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+---
+
+## Set up
+```{r, setup, include = FALSE}
+# Load packages -----------------------------------
+library(knitr)
+opts_chunk$set(cache = FALSE, warning = FALSE, comment = FALSE, message = FALSE)
+```
+
+```{r preparation environment}
+# set seed for reproducibility -----------------------------------
+set.seed(2022)
+
+# load libraries -----------------------------------
+library(readxl)
+library(ggplot2) 
+library(SingleCellExperiment)
+library(DESeq2)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(tidyverse)
+library(msigdbr)
+
+# Organize environment  -----------------------------------
+# base directory
+base_dir <- "/Users/sdaniell/Dropbox (Partners HealthCare)/Sara Danielli/Project/Ependymoma/9 - scRNAseq coculture"
+
+# directory with stored object
+data_dir <- file.path(base_dir, 'analysis/data')
+
+# data directory for storing output
+plot_dir <- file.path(base_dir, 'analysis/plots/DEG')
+if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
+
+resources_dir <- file.path(base_dir, 'scripts/resources')
+source(file.path(resources_dir, "Plot_style_v2.R"))
+
+# Read Seurat objects 
+EP1NS_combined <- readRDS(file.path(data_dir, "Mono_co_culture_merged.rds"))
+
+# transform into matrix
+cm <- EP1NS_combined[["RNA"]]$counts
+# extract metadata
+metadata_seurat <- EP1NS_combined@meta.data
+# transform as single cell object
+EPN_sce <- SingleCellExperiment(list(counts = cm),
+                            colData = metadata_seurat
+)
+```
+
+We now have an updated SCE object that contains samples that were obtained from a FBS and normal culture conditions.
+
+We should make sure that we have enough biological replicates from each group to set up our experiment.
+It is imperative to consider good experimental design and ensure that we have enough biological replicates (at least 3 for each group) when performing differential gene expression analysis.
+
+
+## Differential expression analysis
+
+Now we are ready to start preparing for our DE analysis, where we will compare the gene expression between conditions.
+
+We do not want to use corrected gene expression values for differential expression; `DESeq2` expects the original raw counts as input so we will be using data found in the `counts` assay of the `SingleCellExperiment` object.
+
+It is advised to only use the corrected values for any analyses being performed at the cell level, e.g., dimensionality reduction.
+In contrast, it is not advised to use corrected values for any analyses that are gene-based, such as differential expression or marker gene detection, because within-batch and between-batch gene expression differences are no longer preserved.
+The reason for this is two-fold -- many of the DE models will expect uncorrected counts because they will account for between-sample variation within the model, and we want to ensure we are preserving variation that is present so as not to artificially inflate differences between populations.
+See the [OSCA chapter on Using the corrected values](https://bioconductor.org/books/3.16/OSCA.multisample/using-corrected-values.html#using-corrected-values) for more insight.
+
+### Pseudo-bulking
+
+Before we can compare the gene expression profiles of adherent vs PDX samples, we will need to "pseudo-bulk" the gene counts.
+Pseudo-bulking creates a new counts matrix that contains the sum of the counts from all cells with a given label (e.g., cell type) for each sample ([Tung *et al.* 2017](https://doi.org/10.1038/srep39921)).
+If we were to keep each cell's counts separate, they would be treated as replicates, leading to inflated statistics.
+By pseudo-bulking first, we will now have one count for each gene for each sample and we can take advantage of well-established methods for differential expression with bulk RNA-seq.
+
+Pseudo-bulking is implemented prior to differential expression analysis on single-cell data because it:
+
+-   Produces larger and less sparse counts, which allows us to use standard normalization and differential expression methods used by bulk RNA-seq.
+-   Collapses gene expression counts by sample, so that samples, rather than cells, represent replicates.
+-   Masks variance within a sample to emphasize variance across samples. This can be both good and bad! Masking intra-sample variation means you might not identify genes where average expression doesn't change between samples but the degree of cell-to-cell variation does.
+
+
+We will use the [`scuttle::aggregateAcrossCells()` function](https://rdrr.io/github/LTLA/scuttle/man/aggregateAcrossCells.html) to pseudo-bulk our dataset.
+This function takes as input an SCE object and the grouping assignments for each cell.
+The output will be an SCE object that contains only the pseudo-bulked counts for all genes across all specified groups, rather than across all cells.
+We can then subset this SCE to just include our cell type of interest (tumor subpop.) for input to the DE analysis.
+
+We can pseudo-bulk using any grouping that we are interested in.
+For right now, we are interested in looking at gene expression across cell types, so we want to group the pseudo-bulked counts matrix by both cell type and original sample.
+
+```{r pseudobulk sce}
+# first subset the coldata 
+# to only have the columns we care about for pseudo-bulking 
+EPN_groups <- colData(EPN_sce)[, c("sample", "SingleR.labels")]
+
+# create a new SCE object that contains 
+# the pseudo-bulked counts across the provided groups 
+EPN_sce <- scuttle::aggregateAcrossCells(EPN_sce, 
+                                        id = EPN_groups)
+
+# column names aren't automatically added to the pseudo-bulked sce, 
+# so let's add them in 
+
+colnames(EPN_sce) <- glue::glue(
+  "{EPN_sce$model}_{EPN_sce$SingleR.labels}"
+)
+
+EPN_sce
+```
+
+
+### Perform differential expression with `DESeq2`
+
+Now we will use the `DESeq2` package to perform differential expression (DE) analysis on our pseudo-bulked SCE object.
+From this point, we can proceed in the same way we would if we had a bulk RNA-seq dataset with 6 samples.
+We will start with the unnormalized raw counts in the `counts` assay of the pseudo-bulked SCE and do the following with `DESeq2`:
+
+-   Create a `DESeqDataSet` object
+-   Normalize and log transform the counts data
+-   Estimate dispersions and shrink estimates
+-   Fit a negative binomial model and perform hypothesis testing using Wald statistics
+
+
+#### Create the `DESeqDataSet` object
+
+To create the `DESeqDataSet` object we will need the unnormalized counts matrix, the metadata associated with the samples, and a design formula.
+The first two items are already stored in our SCE object, so we can create a `DESeqDataSet` object directly from that object using the `DESeqDataSet()` function.
+The design formula is used to indicate which columns of the metadata need to be considered in the DE comparison.
+For our experiment we are comparing gene expression between co-culture vs mono-culture
+The subtype information is stored in the `diagnosis_group` column of the `colData` in the pseudo-bulked SCE.
+
+```{r deseq object, live=TRUE}
+# set up the deseq object, group by variable of interest
+deseq_object <- DESeq2::DESeqDataSet(EPN_sce,
+                                     design = ~ model)
+```
+
+The pseudo-bulked SCE object contains only one assay: the `counts` assay.
+This is because `DESeq2` expects raw counts.
+When we run `DESeq2` on our dataset, raw counts will first be normalized using size factors to account for differences in total sample counts.
+Therefore we don't have to do any normalization on our own -- we'll let `DESeq2` do all the work for us.
+
+However, before we dive into DE analysis, we can do some initial exploration and visualization of our data to see if our samples separate by our known factor of interest.
+
+In order to create our PCA plot, we will first need to normalize our data to account for any technical variations across samples.
+As a reminder, this is NOT required for running `DESeq2` analysis; we are just using it to visualize our data prior to DE analysis.
+
+```{r normalize}
+# estimate size factors first
+deseq_object <- DESeq2::estimateSizeFactors(deseq_object)
+
+# normalize and log transform to use for visualization
+normalized_object <- DESeq2::rlog(deseq_object, 
+                                  blind = TRUE)
+normalized_object
+```
+
+We now have a normalized and transformed object that can be directly input to the `DESeq2::plotPCA()` function, which will both calculate and plot the PC results.
+
+```{r plotPCA, live=TRUE, fig.width = 5, fig.height = 6, fig.align="center"}
+DESeq2::plotPCA(normalized_object, intgroup = "model")
+ggsave(file.path(plot_dir, "1_PCA_sample.pdf"), width=6, height=6)
+
+```
+
+
+#### Run `DESeq`
+
+We'll now use the convenience function `DESeq()` to perform our differential expression analysis.
+This function calculates normalization factors, estimates gene-wise dispersions, fits a negative binomial model and performs hypothesis testing using Wald statistics.
+
+```{r deseq, live=TRUE}
+# run DESeq
+deseq_object <- DESeq2::DESeq(deseq_object)
+```
+
+We can evaluate how well the model fit our data by looking at the dispersion estimates.
+We expect to see the dispersion estimates decrease as means are increasing and follow the line of best fit.
+
+```{r plot dispersion, live=TRUE, fig.width = 5, fig.height = 6, fig.align="center"}
+plotDispEsts(deseq_object)
+ggsave(file.path(plot_dir, "2_plot_dispersion.pdf"), width=5, height=6)
+
+```
+
+Now we can extract the results from the object, specifying the p-value threshold that we would like to use.
+
+```{r results, live=TRUE}
+# extract the results as a DataFrame
+deseq_results <- DESeq2::results(deseq_object, alpha = 0.05)
+```
+
+But we aren't done yet!
+
+The estimates of log2 fold change calculated by `DESeq()` are not corrected for expression level.
+This means that when counts are small, we are likely to end up with some large fold change values that overestimate the true extent of the change between conditions.
+
+We can correct this by applying a "shrinkage" procedure, which will adjust large values with small counts downward, while preserving values with larger counts, which are likely to be more accurate.
+
+To do this, we will use the `lfcShrink()` function, but first we need to know the name and/or position of the "coefficient" that was calculated by `DESeq()`, which we can do with the `resultsNames()` function.
+
+```{r coefficient, live=TRUE}
+# identify position of coefficient
+DESeq2::resultsNames(deseq_object)
+```
+
+```{r shrinkage}
+# appyly logFC shrinkage using the default model
+shrink_results <- DESeq2::lfcShrink(
+  deseq_object, 
+  res = deseq_results, 
+  coef = "model_Coculture_vs_Monoculture",
+  type = "apeglm"
+)
+
+# convert results to a dataframe
+deseq_results <- shrink_results |>
+  # converting results into a data frame
+  tibble::as_tibble(rownames = "gene_symbol")
+
+head(deseq_results)
+
+```
+
+```{r save deseq, live=TRUE}
+# save our results 
+write.csv(deseq_results, file.path(plot_dir, "3_markers_Coculture_vs_Monoculture.csv"))
+
+```
+
+The last thing that we will do is take a look at how many genes are significant.
+Here we will want to use the adjusted p-value, found in the `padj` column of the results, as this accounts for multiple test correction.
+
+```{r significant results, live=TRUE}
+# first look at the significant results 
+deseq_results_sig <- deseq_results |>
+  # filter based on adjusted pvalue
+  dplyr::filter(padj <= 0.05)
+head(deseq_results_sig)
+
+# save significant results
+write.csv(deseq_results_sig, file.path(plot_dir, "4_markers_Coculture_vs_Monoculture_significant.csv"))
+
+```
+
+### Exploring the identified differentially expressed genes
+
+Now that we have identified a set of genes that are differentially expressed, lets actually take a look at them and see if we can make some informative plots.
+The first plot we'll make is a volcano plot using the [`EnhancedVolcano` package](https://github.com/kevinblighe/EnhancedVolcano).
+This package automatically colors the points by cutoffs for both significance and fold change and labels many of the significant genes (subject to spacing).
+`EnhancedVolcano` has many, many options, which is a good thing if you don't like all of its default settings.
+Even better, it outputs a `ggplot2` object, so if we want to customize the plot further, we can use the same `ggplot2` commands we have used before.
+
+```{r volcano, fig.width = 6, fig.height = 5, fig.align="center"}
+EnhancedVolcano::EnhancedVolcano(deseq_results,
+                                 x = 'log2FoldChange', # fold change statistic to plot
+                                 y = 'pvalue', # significance values
+                                 lab = deseq_results$gene_symbol, # labels for points
+                                 pCutoff = 1e-05, # p value cutoff (default)
+                                 FCcutoff = 1, # fold change cutoff (default)
+                                 title = NULL, # no title
+                                 subtitle = NULL, # or subtitle
+                                 caption = NULL, # or caption
+                                 drawConnectors = TRUE, # add some fun arrows
+                                 labSize = 3  # smaller labels
+) +
+  # change the overall theme
+  theme_bw() +
+  # move the legend to the bottom
+  theme(legend.position = "bottom")
+ggsave(file.path(plot_dir, "5_Volcano_plot_FBS_vs_noFBS.pdf"), width=6, height=5)
+
+```
+
+# Perform overrrepresentation analysis 
+Now let's find the pathways enriched in up/down regulated genes using ClusterProfiler.
+
+In this notebook, we'll cover a type of pathway or gene set analysis called over-representation analysis (ORA).
+The idea behind ORA is relatively straightforward: given a set of genes, do these genes overlap with a pathway more than we expect by chance?
+The simplicity of only requiring an input gene set (sort of, more on that below) can be attractive.
+
+ORA has some limitations, outlined nicely (and more extensively!) in [Khatri _et al._ (2012)]( https://doi.org/10.1371/journal.pcbi.1002375).
+One of the main issues with ORA is that typically all genes are treated as equal -- the context of the magnitude of a change we may be measuring is removed and each gene is treated as independent, which can sometimes result in an incorrect estimate of significance.
+
+We will use the [`clusterProfiler` package](https://bioconductor.org/packages/release/bioc/html/clusterProfiler.html) ([Yu *et al.* 2012](https://doi.org/10.1089/omi.2011.0118.)) to perform ORA.
+`clusterProfiler` has many built-in functions that will run a specific type of analysis using a specific source of pathways/gene sets automatically, but for our purposes we're going to keep things as general as possible.
+See the [`clusterProfiler` book](https://yulab-smu.github.io/clusterProfiler-book/index.html) for more information about the package's full suite of functionality.
+
+
+## Over-representation Analysis (ORA)
+
+### Marker gene preparation
+We're interested in what pathways are over-represented in genes that mark, or are more highly expressed in, FBS.
+
+#### Markers of interest set (top 200)
+```{r FBS_genes}
+markers <- deseq_results_sig |>
+  # Positive fold changes
+  dplyr::filter(log2FoldChange > 0) |>
+    # Take the "top 100" when ordering by FDR (smallest FDR values)
+  dplyr::slice_min(order_by = padj, n = 200) |>
+  # Extract a vector of the gene symbols
+  dplyr::pull(gene_symbol)
+```
+
+
+#### Background set
+```{r get_background_set, live = TRUE}
+background_set <- deseq_results$gene_symbol
+```
+
+### Gene Ontology ORA
+
+The Gene Ontology (GO) ([Ashburner *et al.* 2000](https://dx.doi.org/10.1038/75556); [The Gene Ontology Consortium. 2021](https://doi.org/10.1093/nar/gkaa1113))is [an ontology](https://en.wikipedia.org/wiki/Ontology_(information_science)) that documents or describes how genes function in the biological domain and is comprised of 3 parts ([GO ontology documentation](http://geneontology.org/docs/ontology-documentation/)):
+
+* **Molecular function (MF):** activities that occur on the molecular level, often can be performed by individual genes
+* **Biological process (BP):** programs carried out by multiple molecular entities; similar to what is sometimes thought of as a pathway, but with no notion of _dynamics_
+* **Cellular component (CC):** cellular structures and compartments
+
+GO is "loosely hierarchical" ([GO ontology documentation](http://geneontology.org/docs/ontology-documentation/)).
+There are parent and child terms, where the "higher up" a term is, the more general it is.
+This is somewhat abstract, so let's take a look at a GO term that's likely to be relevant to our Hodgkin's lymphoma data to get an idea of what this is like in practice: [`leukocyte activation`](http://www.informatics.jax.org/vocab/gene_ontology/GO:0045321).
+
+#### Run `enrichGO()`
+
+Now that we have our background set and our genes of interest, we're ready to run ORA using the `enrichGO()` function.
+
+```{r go_ora}
+go_ora_results <- enrichGO(gene = markers,  # Top 200 genes
+                           universe = background_set,  # Background genes
+                           keyType = "SYMBOL",  # Our genes are gene symbols
+                           OrgDb = org.Hs.eg.db,  # Supports conversion, if needed
+                           ont = "BP",  # Biological process
+                           pAdjustMethod = "BH",  # FDR
+                           pvalueCutoff = 0.00001) # Very stringent for viz
+```
+
+
+```{r view_go_ora, eval = FALSE}
+View(go_ora_results)
+```
+
+The information we're most likely interested in is in the `result` slot.
+Let's convert this into a data frame that we can write to file.
+
+```{r go_df}
+go_result_df <- data.frame(go_ora_results@result)
+write.csv(go_result_df, file.path(plot_dir, "6_enrichGO_FBS_vs_control.csv"))
+
+```
+
+Let's take a look at the GO sets with an adjusted p-value less than 0.001.
+
+```{r filter_padj, live = TRUE}
+go_result_df |>
+  dplyr::filter(p.adjust < 0.001)
+write.csv(go_result_df, file.path(plot_dir, "7_enrichGO_FBS_vs_control_pval_0001.csv"))
+
+```
+
+Some of these columns have names that are somewhat opaque and are used for visualization, so let's briefly talk about them here!
+
+| Column name | Numerator | Denominator |
+|-------------|-----------|-------------|
+| `GeneRatio` | Number of genes in the top 100 marker genes and the specific gene set (also in `Count` column) | Number of genes in the top 100 marker genes and _any_ gene set |
+| `BgRatio`   | Number of genes in the background set and the specific gene set | Number of genes in the background set and _any_ gene set |
+
+#### Visualizing results
+
+We can use a dot plot to visualize our significant enrichment results.
+
+```{r dotplot, live = TRUE, fig.width = 6, fig.height = 10, fig.align="center"}
+enrichplot::dotplot(go_ora_results)
+ggsave(file.path(plot_dir, "8_Dotplot.pdf"), width=6, height=10)
+```
+
+## Gene set enrichment analysis (GSEA)
+Here, we'll analyze the marker genes enriched in FBS, just as we did in the previous part
+Unlike ORA, GSEA allows us to use the full list of genes we could reliably measure, rather than picking some cutoff ourselves.
+
+GSEA is a functional class scoring (FCS) approach to pathway analysis that was first introduced in [Subramanian _et al._ (2005)](https://doi.org/10.1073/pnas.0506580102).
+The rationale behind FCS approaches is that small changes in individual genes that participate in the same biological process or pathway can be significant and of biological interest.
+FCS methods are better suited for identifying these pathways that show coordinated changes than ORA.
+In ORA, we pick a cutoff that _typically_ only captures genes with large individual changes.
+
+There are 3 general steps in FCS methods ([Khatri _et al._ 2012]( https://doi.org/10.1371/journal.pcbi.1002375)):
+
+1. Calculate a gene-level statistic (here, we'll use the summary log fold changes in our marker genes table)
+2. Gene-level statistics are aggregated into a pathway-level statistic
+3. Assess the statistical significance of the pathway-level statistic
+
+We'll note here that GSEA was designed to detect small coordinated changes between _conditions_ in (necessarily bulk!) microarray data.
+It may be more difficult to suss out small coordinated changes when we assay individual cells, due to technical or biological dropout.
+
+Individual cells may also differently sized ([Blasi *et al.* 2017](https://doi.org/10.1088/1478-3975/aa609a)), be at different stages of the cell cycle ([Satija lab](https://satijalab.org/seurat/archive/v3.1/cell_cycle_vignette.html)), or experiencing different levels of cellular stress ([Luecken and Theis. 2019](https://doi.org/10.15252/msb.20188746)), some of which may be interesting in the context of cancer and therefore should not be corrected for.
+These aspects also have the potential to cloud our ability to detect small coordinated changes in other pathways.
+
+There is some literature that suggests that dropout (excessive zeros) observed in single cell data is a function of cell type heterogeneity ([Kim *et al.* 2020](https://doi.org/10.1186/s13059-020-02096-y)).
+We're using GSEA to compare clusters of cells, which we (ideally) expect to be different biological states and/or cell types.
+If many genes "drop out" between cell types, we may expect our statistics used as input to GSEA to be noisy.
+
+With all this in mind, it may be unsurprising that ORA, which generally captures genes with large individual changes and lower within-group variation (the most "statistically significant" genes), is well-suited to analyzing scRNA-seq data and the advantages of GSEA in a bulk analysis setting may not be fully available here.
+Nonetheless, GSEA is used for pathway analysis of scRNA-seq data.
+
+Methods specifically for pathway analysis of scRNA-seq (e.g., [Ma *et al.* 2020](https://doi.org/10.1038/s41467-020-15298-6)) are being developed, so stay tuned!
+
+
+### Setup
+
+#### Input files
+
+```{r input_files}
+input_file <- deseq_results_sig
+```
+
+
+#### Output files
+
+We'll save our table of GSEA results as a TSV.
+
+```{r output_files}
+output_file <- file.path(plot_dir,
+                         "FBS_gsea_results.tsv")
+```
+
+## Gene sets
+
+We will use gene sets from the [Molecular Signatures Database (MSigDB)](https://www.gsea-msigdb.org/gsea/msigdb/index.jsp) from the Broad Institute ([Subramanian, Tamayo *et al.* 2005](https://doi.org/10.1073/pnas.0506580102)).
+The [`msigdbr`](https://cran.r-project.org/web/packages/msigdbr/index.html) package contains MSigDB datasets already in the tidy format required by `clusterProfiler` and supports multiple organisms.
+
+Let's take a look at what organisms the package supports.
+
+```{r show_species}
+msigdbr_species()
+```
+
+MSigDB contains 8 different gene set collections.
+
+    H: hallmark gene sets
+    C1: positional gene sets
+    C2: curated gene sets
+    C3: motif gene sets
+    C4: computational gene sets
+    C5: GO gene sets
+    C6: oncogenic signatures
+    C7: immunologic signatures
+    C8: cell type signatures derived from scRNAseq
+
+
+We can retrieve only specific gene sets by specifying e.g. `category = "C7"` to the `msigdbr()` function.
+Again, we only want human gene sets here so we specify with that with the `species` argument.
+
+```{r GSEA gene set, live = TRUE}
+hs_cell_type_df <- msigdbr(species = "Homo sapiens",
+                             category = "C5")
+```
+
+## Gene Set Enrichment Analysis
+
+GSEA calculates a pathway-level metric, called an enrichment score (sometimes abbreviated as ES), by ranking genes by a gene-level statistic.
+This score reflects whether or not a gene set or pathway is over-represented at the top or bottom of the gene rankings ([Subramanian _et al._ 2005](https://doi.org/10.1073/pnas.0506580102); [Yu](http://yulab-smu.top/clusterProfiler-book/chapter2.html#gene-set-enrichment-analysis))
+
+Specifically, all genes are ranked from most positive to most negative based on their statistic and a running sum is calculated:
+Starting with the most highly ranked genes, the running sum increases for each gene in the pathway and decreases for each gene not in the pathway.
+The enrichment score for a pathway is the running sum's maximum deviation from zero.
+GSEA also assesses statistical significance of the scores for each pathway through permutation testing.
+As a result, each input pathway will have a p-value associated with it that is then corrected for multiple hypothesis testing ([Subramanian _et al._ 2005](https://doi.org/10.1073/pnas.0506580102); [Yu](http://yulab-smu.top/clusterProfiler-book/chapter2.html#gene-set-enrichment-analysis)).
+
+The implementation of GSEA we use in here examples requires a gene list ordered by some statistic and input gene sets.
+When you use previously computed gene-level statistics with GSEA, it is called GSEA pre-ranked.
+
+### Removing duplicates 
+
+```{r}
+head(input_file)
+```
+
+We do need to check for duplicate gene symbols.
+We can accomplish this with `duplicated()`, which returns a logical vector (e.g., `TRUE` or `FALSE`).
+The function `sum()` will count `TRUE` values as 1s and `FALSE` as 0s, so using it with `duplicated()` will count the number of duplicate values.
+
+```{r any_duplicated, live = TRUE}
+sum(duplicated(input_file$gene_symbol))
+```
+
+Luckily this number is 0
+
+Now we're ready to prep our pre-ranked list for GSEA.
+
+### Pre-ranked list
+
+The `GSEA()` function takes a pre-ranked (sorted) named vector of statistics, where the names in the vector are gene identifiers.
+This is step 1 -- gene-level statistics.
+
+Here, we're using the summary log fold change, which summarizes of all of the log fold changes from the pairwise comparisons between cluster 1 and other clusters into a single value ([ref](https://rdrr.io/bioc/scran/man/combineMarkers.html)).
+As such, this statistic gives us information about the relative magnitude and directionality of each gene's expression in cluster 1 relative to all other clusters.
+
+
+```{r lfc_vector}
+lfc_vector <- input_file |>
+  # Extract a vector of `summary.logFC` named by `gene_symbol`
+  dplyr::pull(log2FoldChange, name = gene_symbol)
+lfc_vector <- sort(lfc_vector, decreasing = TRUE)
+```
+
+Let's look at the top ranked values.
+
+```{r head_lfc, live = TRUE}
+# Look at first entries of the log fold change vector
+head(lfc_vector)
+```
+
+And the bottom of the list.
+
+```{r tail_lfc, live = TRUE}
+# Look at the last entries of the log fold change vector
+tail(lfc_vector)
+```
+
+## Run GSEA
+
+Now for the analysis!
+
+We can use the `GSEA()` function to perform GSEA with any generic set of gene sets, but there are several functions for using specific, commonly used gene sets (e.g., `gseKEGG()`).
+
+```{r run_gsea}
+gsea_results <- GSEA(geneList = lfc_vector,  # ordered ranked gene list
+                     minGSSize = 25,  # minimum gene set size
+                     maxGSSize = 500,  # maximum gene set set
+                     pvalueCutoff = 0.05,
+                     pAdjustMethod = "BH",  # correction for multiple hypothesis testing
+                     TERM2GENE = dplyr::select(hs_cell_type_df,
+                                               gs_name,
+                                               gene_symbol))
+```
+Let's take a look at the GSEA results.
+
+```{r view_gsea, live = TRUE, eval = FALSE}
+View(gsea_results@result |>
+       dplyr::arrange(dplyr::desc(NES))
+)
+```
+
+Normalized enrichment scores (NES) are enrichment scores that are scaled to make gene sets that contain different number of genes comparable.
+
+Let's write these results to file.
+
+```{r write_gsea}
+gsea_results@result |> readr::write_tsv(output_file)
+```
+
+Let's take a look at the GSEA results.
+
+```{r view_gsea, live = TRUE, eval = FALSE}
+View(gsea_results@result |>
+       dplyr::arrange(dplyr::desc(NES))
+)
+```
+
+And visualize the top 30 pathways
+
+```{r pathways up-down-regulated, fig.width = 10, fig.height = 10, fig.align="center"}
+## Plot barplot with sign of FC
+ggplot(gsea_results, aes(NES, fct_reorder(Description, NES), fill=qvalue), showCategory=20) + 
+  geom_col(orientation='y') + 
+  paletteer::scale_fill_paletteer_c("ggthemes::Brown")  + ylab(NULL) + theme_classic() + 
+  geom_vline(xintercept = 0, color = "black") +
+  theme(
+    axis.text.x = element_text(size = 12, color = "black"),   # Adjust x-axis label properties
+    axis.text.y = element_text(size = 12, color = "black"),    # Adjust y-axis label properties
+    legend.text = element_text(size = 12, color = "black"),
+    legend.title = element_text(size = 12, color = "black")
+  )
+ggsave(file.path(plot_dir, "9_Barplot.pdf"), width=10, height=10)
+
+```
+
+## Print session info
+
+```{r session info}
+sessionInfo()
+```
+
+
+
