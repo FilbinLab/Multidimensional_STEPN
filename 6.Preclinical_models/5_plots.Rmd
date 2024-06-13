@@ -1,0 +1,250 @@
+---
+title: "scRNAseq comparison of different models of ZFTA::RELA tumors"
+author: "Sara Danielli"
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+  html_notebook:
+    toc: yes
+    toc_float: yes
+---
+
+```{r, setup, include = FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = TRUE, cache = TRUE, warning = FALSE, comment = FALSE)
+```
+
+```{r message=FALSE, warning=FALSE}
+# Load packages -----------------------------------
+library(dplyr)
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(SeuratObject)
+library(data.table)
+library(tidyverse)
+library(future)
+#library(clustree)
+#library(clusterProfiler)
+library(ggpubr)
+library(cowplot)
+library(ggrastr)
+library(readxl)
+library(writexl)
+
+# Organize environment  -----------------------------------
+base_dir <- "/Users/sdaniell/Dropbox (Partners HealthCare)/Sara Danielli/Project/Ependymoma/6 - scRNAseq models"
+analysis_dir <- file.path(base_dir, 'analysis')
+resource_dir <- file.path(base_dir, 'scripts/resources')
+
+plot_dir <- file.path(analysis_dir, 'plots')
+if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
+
+data_dir <- file.path(analysis_dir, 'data')
+
+source(file.path(resource_dir, "single_cell_preprocessing_helper_functions.R"))
+source(file.path(resource_dir, 'Plot_style.R'))
+
+
+# Define color palettes  -----------------------------------
+col_model = c('grey80', paletteer::paletteer_d("beyonce::X18")[3:5])
+colors_metaprograms<- c("gray30","#F99E93FF","#9E5E9BFF","#74ADD1FF",'#0F4F8B', "#ACD39EFF","#96410EFF", 'mistyrose1')
+
+names(colors_metaprograms) <- c("Cycling", "Neuroepithelial-like", "Radial-glia-like", 
+                          "Embryonic-neuronal-like", "Neuronal-like" ,"Ependymal-like", "MES-like", "Embryonic-like")
+
+
+# load Seurat object -----------------------------------
+seurat_obj_merged <- readRDS(file.path(analysis_dir, "data/Patient_models_merged.rds"))
+
+
+```
+
+# UMAP plots
+
+Plot UMAP colored by different metadata columns
+
+## By cluster
+```{r UMAP clusters, fig.width = 5, fig.height = 4, fig.align="center"}
+## by clusters
+DimPlot(seurat_obj_merged, group.by = 'seurat_clusters', reduction = "umap", pt.size = 1)
+ggsave(file.path(plot_dir, "2_UMAP_clusters.pdf"), width=6, height=5)
+```
+## By model
+```{r UMAP model, fig.width = 5, fig.height = 4, fig.align="center"}
+## by model
+DimPlot(seurat_obj_merged, reduction = "umap", group.by = 'model', pt.size = 1, cols = col_model)
+ggsave(file.path(plot_dir, "2_UMAP_model.pdf"), width=6, height=5)
+
+```  
+
+## By metaprogram
+```{r UMAP metaprogram, fig.width = 12, fig.height = 4, fig.align="center"}
+## by metaprogram
+p1 <- DimPlot(seurat_obj_merged, reduction = "umap", group.by = 'SingleR.labels', pt.size = 1, cols = colors_metaprograms)
+p2 <-  DimPlot(seurat_obj_merged, reduction = "umap", group.by = 'signature_1', pt.size = 1, cols = colors_metaprograms)
+(p1 + p2)
+ggsave(file.path(plot_dir, "2_UMAP_metaprogram.pdf"), width=12, height=5)
+```  
+
+## By scores
+```{r UMAP scores, fig.width = 9, fig.height = 5, fig.align="center"}
+scores <- c('Neuronal-like', 'MES-like', 'Radial-glia-like', 'Ependymal-like', 'Neuroepithelial-like', 'Cycling')
+names(scores) <- c('Neuronal-like', 'MES-like', 'Radial-glia-like', 'Ependymal-like', 'Neuroepithelial-like', 'Cycling')
+p <- FeaturePlot(seurat_obj_merged, features = scores, reduction = "umap", order = TRUE, combine = FALSE, pt.size = 1)
+
+for(i in 1:length(p)) {
+  p[[i]] <- p[[i]] + NoAxes() + paletteer::scale_colour_paletteer_c("viridis::mako", direction = -1) +
+      labs (title = names(scores)[[i]]) 
+  }
+
+cowplot::plot_grid(plotlist = p, ncol=3)
+ggsave(file.path(plot_dir, "3_UMAP_scores.pdf"), width=9, height=5, dpi=300)
+```   
+
+# Violin plots
+Plot Violin plots of tumor program scores 
+
+```{r Vln plots, fig.width = 8, fig.height = 8, fig.align="center"}
+p <- VlnPlot(seurat_obj_merged, features = scores, group.by = 'model', combine = FALSE, pt.size=0, cols = col_model) 
+
+for(i in 1:length(p)) {
+    p[[i]] <- p[[i]] + NoLegend() +
+      labs (y='Module score, AU', x='') + 
+      scale_fill_manual(values = col_model) + 
+      geom_boxplot(outlier.shape=NA, width=0.1, fill="white") +
+      # stat_compare_means(aes(label = after_stat(p.signif)), 
+      #                    method = 't.test', 
+      #                    size = 5, 
+      #                    label.y.npc = 0.92, 
+      #                    label.x.npc = 0.5, 
+      #                    ) + 
+      NoLegend()
+      theme_vln
+  }
+plot_grid(plotlist = p, ncol=3)
+ggsave(file.path(plot_dir, "4_VlnPlot_scores.pdf"), width=6, height=8)
+```
+
+Plot Violin plots of selected scores 
+
+```{r Vln plots 2, fig.width = 8, fig.height = 4, fig.align="center"}
+plot_grid(p[[5]], p[[1]], p[[4]], p[[3]], ncol = 4) 
+ggsave(file.path(plot_dir, "5_VlnPlot_scores_selected.pdf"), width=8, height=4)
+```
+
+# Violin plots
+Plot Violin plots of markers 
+
+```{r Vln plot markers, fig.width = 8, fig.height = 6, fig.align="center"}
+markers <- c('VIM', 'NES', 'GRID2', 'DCX', 'TUBB3', 'CCDC40', 'S100B')
+
+p <- VlnPlot(seurat_obj_merged, features = markers, group.by = 'model', combine = FALSE, pt.size=0, cols = col_model) 
+
+for(i in 1:length(p)) {
+    p[[i]] <- p[[i]] + NoLegend() +
+      labs (y='Module score, AU', x='') + 
+      scale_fill_manual(values = col_model) + 
+      geom_boxplot(outlier.shape=NA, width=0.1, fill="white") +
+      # stat_compare_means(aes(label = after_stat(p.signif)), 
+      #                    method = 't.test', 
+      #                    label.x.npc = 0.5, 
+      #                    label.y.npc = 0.92, 
+      #                    label.x = 1.3
+      #                    ) + 
+            theme_vln +
+      NoLegend()
+  }
+plot_grid(plotlist = p, ncol=4)
+ggsave(file.path(plot_dir, "5_VlnPlot_markers.pdf"), width=8, height=6)
+```
+
+
+# Barplot 
+
+Barplot of label transfer
+```{r barplot singleR, fig.width = 10, fig.height = 4, fig.align="center"}
+## Bar plot
+p1 <- plot_bar(seurat_obj_merged, seurat_obj_merged$model, seurat_obj_merged$SingleR.labels, col = colors_metaprograms) 
+p2 <- plot_bar(seurat_obj_merged, seurat_obj_merged$model, seurat_obj_merged$signature_1, col = colors_metaprograms) 
+(p1 + p2)
+ggsave(file.path(plot_dir, "7_Barplot_label_transfer_model.pdf"), width=10, height=4)
+```
+
+
+Number of cells assigned to cell states
+```{r table nr cells NMF scoring, fig.width = 4, fig.height = 4, fig.align="center"}
+# Visualize the number of cells  per sample considering quality
+metadata_seurat <- seurat_obj_merged@meta.data
+# Print out number of good and bad quality cells
+number_cells <- metadata_seurat %>% 
+  group_by(model, signature_1) %>% 
+  summarise(n = n())  %>%
+  pivot_wider(names_from = signature_1, values_from = n) 
+
+```
+
+Barplot of label transfer
+```{r barplot singleR split by patient, fig.width = 10, fig.height = 4, fig.align="center"}
+## Bar plot
+plot_bar(seurat_obj_merged, seurat_obj_merged$FileName, seurat_obj_merged$signature_1, col = colors_metaprograms) 
+ggsave(file.path(plot_dir, "7_Barplot_label_transfer_sample.pdf"), width=8, height=4)
+```
+
+# Cell state plot
+
+Plot distribution of samples on the hierarchy plot
+```{r cellstate plot 4quadrant colored by metaprogram, fig.width = 5.5, fig.height = 4, fig.align="center"}
+x1 = "Neuroepithelial-like"
+x2 = "Embryonic-like"
+y1 = "Neuronal-like"
+y2 = "Ependymal-like"
+
+group.by="model"
+sample=seurat_obj_merged
+variables_to_retrieve <- c(x1, x2, y1,y2)
+
+# And store them as a tibble.
+scores <- sample@meta.data[, variables_to_retrieve]
+# Shuffle the cells so that we accomplish a random plotting, not sample by sample.
+
+# Compute Y axis values.
+d <- apply(scores, 1, function(x){max(x[c(x1, x2)]) - max(x[c(y1, y2)])})
+
+# Compute X axis values.
+x <- vapply(seq_along(d), function(x) {
+  if (d[x] > 0) {
+    d <- log2(abs(scores[x, x1] - scores[x, x2]) + 1)
+    ifelse(scores[x, x1] < scores[x, x2], d, -d)
+  } else {
+    d <- log2(abs(scores[x, y1] - scores[x, y2]) + 1)
+    ifelse(scores[x, y1] < scores[x, y2], d, -d)
+  }
+}, FUN.VALUE = numeric(1))
+
+names(x) <- rownames(scores)
+
+# Plot.
+df_E <- data.frame(row.names = rownames(scores))
+df_E[["set_x"]] <- x
+df_E[["set_y"]] <- d
+df_E[["group.by"]] <- sample@meta.data[, group.by]
+df_E[["subtype"]] <- seurat_obj_merged$model
+
+col_model
+names(col_model) <- c('Patient', 'PDX', 'adherent', 'spheres')
+
+ggplot(df_E,aes(x=set_x,
+              y=set_y,
+              col=group.by))+
+  geom_point(size=1)+
+  scale_color_manual(values=col_model)+
+   theme_cellstate_plot + 
+  labs(x = 'Relative meta-module score', y = 'Relative meta-module score', title = 'ST-EPN cellular hierarchy', subtitle = 'n = 3,941 cells') +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") 
+
+ggsave(file.path(plot_dir, "8_CellState_plot_4way_model.pdf"), width=5.5, height=4)
+
+```
