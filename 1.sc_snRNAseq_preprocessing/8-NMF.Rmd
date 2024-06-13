@@ -1,0 +1,945 @@
+---
+title: "NMF for ST-EPN"
+author: Sara Danielli
+date: '`r format(Sys.time(), "Last modified: %b %d %Y")`'
+output: 
+  rmdformats::readthedown:
+    lightbox: true
+    highlight: tango
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r include = FALSE}
+library(knitr)
+opts_chunk$set(comment = NA, eval = FALSE)
+```
+
+
+## Preparing environment
+Loading libraries, defining paths and sourcing functions.
+```{r prep_env, eval = TRUE, message = FALSE, warning = FALSE}
+library(Seurat)
+library(tidyverse)
+library(pagoda2)
+library(ComplexHeatmap)
+library(dendextend)
+library(SCpubr)
+library(readxl)
+library(glue)
+library(qs)
+
+base_dir <- "/n/scratch/users/s/sad167/EPN/scRNAseq"
+infercnv_dir <- file.path(base_dir, 'analysis/infercnv/frozen/part_1')
+resources_dir <- file.path(base_dir, 'scripts/resources')
+
+source(file.path(resources_dir, "single_cell_preprocessing_helper_functions.R"))
+source(file.path(resources_dir, "NMF_helper_function.R"))
+source(file.path(resources_dir, "Plotting_helper_functions.R"))
+
+metadata <- read_excel(file.path(base_dir, 'metadata.xlsx')) 
+
+## MSigDB
+MSigDB <- readRDS(file.path(resources_dir, 'MSigDB.rds'))
+
+## Reference markers
+ref_markers <- readRDS(file.path(base_dir, 'analysis/NMF/correlation_signatures_reference/signature_markers.rds'))
+
+ref_markers_Gojo <- read_csv(file.path(base_dir, 'analysis/NMF/correlation_signatures_reference/TableS2_epn2020Paper_Metaprograms_Merged.csv'))   
+ref_markers_Gojo <- as.list(ref_markers_Gojo)
+ref_markers_Gojo <- sapply(ref_markers_Gojo, function(x) x[!is.na(x)], simplify = FALSE)
+
+ref_markers_previous_ZFTA <- read_xlsx(file.path(base_dir, 'analysis/NMF/correlation_signatures_reference/1_ZFTA_RELA_Marker_genes.xlsx'))
+ref_markers_previous_ZFTA <- as.list(ref_markers_previous_ZFTA)
+```
+
+
+## ST-EPN
+### Initial Heatmap
+Initial heatmap with correlation between different ranks from different samples
+```{r section_1, echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE}
+figure_dir <- file.path(base_dir, 'analysis/NMF/figures_NPC_split')
+data_dir <- file.path(base_dir, 'analysis/NMF/data')
+if (!dir.exists(figure_dir)) {dir.create(figure_dir, recursive = T)}
+if (!dir.exists(data_dir)) {dir.create(data_dir, recursive = T)}
+
+
+cm <- lapply(list.files(file.path(base_dir, 'analysis/NMF/counts'), pattern = '*.rds', recursive = T, full.names = T), function(x) {
+  tmp <- readRDS(x)
+  tmp[-grep(pattern = "^MT-|^RPS|^RPL", x = rownames(tmp)), ]
+  
+})
+
+ode <- lapply(cm, function(x) {
+  suppressMessages(rownames(hvgPagoda(x, plot_var = F, verbose = F))[1:10000])
+})
+
+cm <- do.call(cbind, cm)
+samples <- gsub("\\..*", "", colnames(cm))
+genes_to_keep <- unique(unlist(ode))
+
+## Normalize and center cm (still only keep malignant cells and all genes that pass the filter)
+cm_norm <- as.matrix(log2(cm/10+1))
+cm_mean <- log2(Matrix::rowMeans(cm)+1)
+cm_center <- cm_norm - rowMeans(cm_norm)
+
+## Load computed nmf_obj_list and nmf_gene_list
+nmf_obj_list <- lapply(list.files(file.path(base_dir, 'analysis/NMF/ranks'), pattern = '*.rds', recursive = T, full.names = T), readRDS)
+names(nmf_obj_list) <- gsub('.rds', '', basename(list.files(file.path(base_dir, 'analysis/NMF/ranks'), pattern = '*.rds', recursive = T, full.names = T)))
+
+nmf_gene_list <- list()
+for (current_sample in names(nmf_obj_list)){
+  nmf_gene_list <- append(nmf_gene_list, findNmfCorrelatedGenes(basis(nmf_obj_list[[current_sample]]), current_sample, return_list = T))
+}
+
+## Compute signature score for each NMF factor (30 representative genes) in all cells 
+nmf_score <- t(scoreNmfGenes(cm_center, cm_mean, nmf_gene_list, verbose = F))
+
+## Concatenate basis matrix of each sample together
+nmf_basis_concat <- concatNmfFactor(nmf_obj_list, genes_to_keep)
+
+## Hierarchical clustering of nmf factors with correlation among nmf scores
+nmf_factor_hc <- clusterNmfFactors(nmf_score)
+nmf_factor_cor <- nmf_factor_hc$cor_coef[nmf_factor_hc$hc_obj$order, nmf_factor_hc$hc_obj$order]
+
+## Heatmap of correlations
+hm_colors <- rev((brewer.pal(n=9, name="RdBu")))
+hm_colors <- colorRampPalette(colors = hm_colors)
+
+pheatmap::pheatmap(nmf_factor_cor, color = hm_colors(100),
+                   cluster_rows = F, cluster_cols = F,
+                   annotation_names_row = F, annotation_names_col = T,
+                   show_rownames = T, show_colnames = F, 
+                   treeheight_row = 0, treeheight_col = 0, 
+                   filename = file.path(figure_dir, '1_nmf_cor.pdf'), 
+                   width = 45, height = 40)
+
+nmf_raw_data <- list()
+nmf_raw_data[["cm"]] <- cm
+nmf_raw_data[["cm_norm"]] <- cm_norm
+nmf_raw_data[["cm_center"]] <- cm_center 
+nmf_raw_data[["cm_mean"]] <- cm_mean
+nmf_raw_data[["samples"]] <- samples
+nmf_raw_data[["basis"]] <- nmf_basis_concat
+nmf_raw_data[["nmf_score"]] <- nmf_score
+nmf_raw_data[["nmf_factor_cor"]] <- nmf_factor_cor
+saveRDS(nmf_raw_data, file = file.path(data_dir, "nmf_raw_data.rds"))
+```
+
+```{r section_2, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE, fig.width = 45, fig.height = 40}
+pheatmap::pheatmap(nmf_factor_cor, color = hm_colors(100),
+                   cluster_rows = F, cluster_cols = F,
+                   annotation_names_row = F, annotation_names_col = T,
+                   show_rownames = T, show_colnames = F, 
+                   treeheight_row = 0, treeheight_col = 0)
+```
+
+
+### Aggregating programs
+In this step we'll aggregate differents ranks from different samples to get the programs
+```{r section_3, echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE, fig.width = 12, fig.height = 6}
+nClust <- 20
+tmp <- cutree(nmf_factor_hc$hc_obj, nClust)
+
+## Ordering metaprograms order
+tmp <- tmp[rownames(nmf_factor_cor)]
+tmp <- plyr::mapvalues(tmp, unique(tmp), 1:nClust, warn_missing = FALSE)
+
+dend <- as.dendrogram(nmf_factor_hc$hc_obj)
+dend <- dend %>%
+  color_branches(k = nClust) %>%
+  set("branches_lwd", c(2,1,2)) %>%
+  set("branches_lty", c(1,2,1))
+labels_cex(dend) <- 0.4
+
+plot(dend); rect.dendrogram(dend, nClust, border = 1)
+```
+
+```{r section_4, echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE}
+## NMF metaprograms
+nmf_meta_programs <- lapply(sort(unique(tmp)), function(x) names(tmp)[tmp==x])
+names(nmf_meta_programs) <- paste("NMF", sort(unique(tmp)), sep = "_")
+
+anno <- NULL
+for (i in 1:length(nmf_meta_programs)) {
+  anno <- rbind(anno, data.frame(nmf = names(nmf_meta_programs)[i], sample = nmf_meta_programs[[i]]))
+}
+rownames(anno) <- anno$sample
+anno$sample <- NULL
+anno$nmf <- factor(anno$nmf, levels = names(nmf_meta_programs))
+annoCol <- list(nmf = structure(colors_to_use[1:length(names(nmf_meta_programs))], names = names(nmf_meta_programs)))
+
+breaks <- anno %>% mutate(nmf2 = as.numeric(as.factor(nmf)), pos = 1:nrow(anno)) %>% group_by(nmf2) %>% summarise(last = last(pos)) %>% pull(last)
+
+ht <- pheatmap::pheatmap(nmf_factor_cor, color = hm_colors(100), 
+                         cluster_rows = F, cluster_cols = F,
+                         annotation_names_row = F, annotation_names_col = T,
+                         show_rownames = T, show_colnames = F,
+                         annotation_row = anno, annotation_col = anno, annotation_colors = annoCol, 
+                         gaps_col = breaks, gaps_row = breaks, 
+                         treeheight_row = 0, treeheight_col = 0, silent = T)
+
+ht$gtable$grobs[[2]]$gp <- gpar(col = plyr::mapvalues(gsub("\\_nmf.*","", ht$gtable$grobs[[2]]$label), 
+                unique(gsub("\\_nmf.*","", ht$gtable$grobs[[2]]$label)), 
+                colors_to_use[1:length(unique(gsub("\\_nmf.*","", ht$gtable$grobs[[2]]$label)))], 
+                warn_missing = FALSE)) ## Coloring by sample
+
+pdf(file.path(figure_dir, '2_nmf_factors_pairwise_cor.pdf'), width = 15, height = 10)
+print(ht)
+invisible(dev.off())
+```
+
+```{r section_4_plot, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE, fig.width = 15, fig.height = 10}
+print(ht)
+```
+
+```{r section_5, echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE}
+## Manually rearranging the clusters
+
+nmf_programs <- list(NMF_1 = nmf_meta_programs$NMF_1, 
+                     #NMF_2 = c(nmf_meta_programs$NMF_2, nmf_meta_programs$NMF_3),
+                     NMF_4 = nmf_meta_programs$NMF_4,  
+                     NMF_7 = nmf_meta_programs$NMF_7,
+                     NMF_10 = c(nmf_meta_programs$NMF_10, nmf_meta_programs$NMF_11, nmf_meta_programs$NMF_12),
+                     NMF_13 = nmf_meta_programs$NMF_13,
+                     NMF_14 = c(nmf_meta_programs$NMF_14, nmf_meta_programs$NMF_15),
+                     NMF_16 = nmf_meta_programs$NMF_16,
+                     NMF_17 = nmf_meta_programs$NMF_17
+                     #NMF_18 = nmf_meta_programs$NMF_18, 
+                     #NMF_19 = nmf_meta_programs$NMF_19
+                     )
+
+anno <- NULL
+for (i in 1:length(nmf_programs)) {
+  anno <- rbind(anno, data.frame(nmf = names(nmf_programs)[i], sample = nmf_programs[[i]]))
+}
+rownames(anno) <- anno$sample
+anno$sample <- NULL
+anno$nmf <- factor(anno$nmf, levels = names(nmf_programs))
+annoCol <- list(nmf = structure(colors_to_use[1:length(names(nmf_programs))], names = names(nmf_programs)))
+
+breaks <- anno %>% mutate(nmf2 = as.numeric(as.factor(nmf)), pos = 1:nrow(anno)) %>% group_by(nmf2) %>% summarise(last = last(pos)) %>% pull(last)
+
+ht <- pheatmap::pheatmap(nmf_factor_cor, color = hm_colors(100), 
+                         cluster_rows = F, cluster_cols = F,
+                         annotation_names_row = F, annotation_names_col = T,
+                         show_rownames = T, show_colnames = F,
+                         annotation_row = anno, annotation_col = anno, annotation_colors = annoCol, 
+                         treeheight_row = 0, treeheight_col = 0, silent = T)
+
+## Coloring by sample
+ht$gtable$grobs[[2]]$gp <- gpar(col = plyr::mapvalues(gsub("\\_nmf.*","", ht$gtable$grobs[[2]]$label), 
+                unique(gsub("\\_nmf.*","", ht$gtable$grobs[[2]]$label)), 
+                colors_to_use[1:length(unique(gsub("\\_nmf.*","", ht$gtable$grobs[[2]]$label)))], 
+                warn_missing = FALSE)) ## Coloring by sample
+
+pdf(file.path(figure_dir, '2_nmf_factors_pairwise_cor_manual.pdf'), width = 15, height = 10)
+print(ht)
+invisible(dev.off())
+```
+
+```{r section_5_plot, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE, fig.width = 15, fig.height = 10}
+print(ht)
+```
+
+### Markers and correlation
+In this step we'll find the markers for each NMF and correlate with the reference
+```{r section_6, echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE}
+################################################################################
+## Compute top30 marker genes and diagnostic statistics for merged metagene programs 
+################################################################################
+program_names <- names(nmf_programs)
+nmf_marker_genes_final <- list()
+nmf_programs_stats <- list()
+
+for (i in seq(length(program_names))){
+  nmf_marker_genes_final[[program_names[[i]]]] <- mergeNmfGenes(nmf_basis_concat, nmf_programs[[i]], n = 30) ## Metaprogram marker genes 
+  nmf_programs_stats[[program_names[[i]]]] <- calculateNmfProgramStats(nmf_basis_concat, nmf_programs[[i]]) ## Metaprogram statistics
+}
+saveRDS(nmf_marker_genes_final, file = file.path(data_dir, "nmf_marker_genes_final.rds"))
+saveRDS(nmf_programs_stats, file = file.path(data_dir, "nmf_program_stats.rds"))
+
+
+################################################################################
+## Compute metagene scores for metagene programs
+################################################################################
+num_metagenes <- length(nmf_marker_genes_final)
+nmf_score_final <- scoreNmfGenes(cm_center, cm_mean, nmf_marker_genes_final)
+nmf_score_final <- t(nmf_score_final)
+
+
+################################################################################
+## Compute and save metagene scores and 1-3 highest metagene programs and scores
+################################################################################
+num_meta_program <- length(nmf_marker_genes_final)
+nmf_score_final_t <- data.frame(nmf_score_final)
+for (i in 1:3){
+  nmf_score_final_t <- metagene_score_signature(nmf_score_final_t, num_meta_program, i)
+}
+saveRDS(nmf_score_final_t, file = file.path(data_dir, "nmf_score.rds"))
+
+
+################################################################################
+## Reprocessing data
+################################################################################
+seurat_obj <- readRDS(file.path(infercnv_dir, "seurat_obj_malignant.rds"))
+metadata <- seurat_obj@meta.data[colnames(cm), ]
+meta <- nmf_score_final_t
+metadata <- cbind(metadata, meta)
+
+seurat_obj <- RunFullSeurat_v5(cm = cm, metadata = metadata,  doBatch = F, project = 'EPN')
+saveRDS(seurat_obj, file.path(data_dir, 'seurat_obj.rds'))
+
+
+################################################################################
+## Save metaprogram genes
+################################################################################
+tmp <- matrix(unlist(nmf_marker_genes_final), ncol = length(nmf_marker_genes_final))
+colnames(tmp) <- names(nmf_marker_genes_final)
+tmp <- data.frame(tmp)
+write.table(tmp, file = file.path(data_dir, "metaprogram_genes.txt"), sep = "\t", quote = F, row.names = F, col.names = T)
+```
+
+### Correlation plots
+In this step we'll find the markers for each NMF and correlate with the reference
+```{r section_7, echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE}
+################################################################################
+## GO enrichment
+################################################################################
+enrichment.matrix <- BuildEnrichmentMatrix(genes = rownames(seurat_obj), type = 'GO')
+go_matrix <- pbapply::pbsapply(nmf_marker_genes_final, function(tbl){
+  Enrichment(geneset = tbl, enrichment.matrix = enrichment.matrix, type = 'GO')
+})
+go_3 <- lapply(colnames(go_matrix), function(cluster){sort(go_matrix[,cluster])[1:5]})
+names(go_3) <- names(nmf_marker_genes_final)
+go_matrix <- -log10(go_matrix+0.00000001)
+
+mat <- go_matrix[unique(gsub(".*\\.", "", names(unlist(go_3)))), ]
+
+pheatmap::pheatmap(mat, color = colorRampPalette(brewer.pal(n = 11, name = "PiYG")[6:11])(100),
+                   cluster_rows = F, cluster_cols = F, show_colnames = T, 
+                   angle_col = '45', fontsize_row = 5, fontsize_col = 6, 
+                   filename = file.path(figure_dir, '3_go_result_metagene_DEGs.pdf'), width = 8, height = 6)
+rm(enrichment.matrix); invisible(gc())
+```
+
+```{r section_7_plot, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 6}
+pheatmap::pheatmap(mat, color = colorRampPalette(brewer.pal(n = 11, name = "PiYG")[6:11])(100),
+                   cluster_rows = F, cluster_cols = F, show_colnames = T, 
+                   angle_col = '45', fontsize_row = 5, fontsize_col = 6)
+```
+
+```{r section_8, echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE}
+################################################################################
+## Finding markers for metaprograms and performing pseudobulk
+################################################################################
+## Markers
+seurat_obj <- readRDS(file.path(data_dir, "seurat_obj.rds"))
+Idents(seurat_obj) <- seurat_obj$signature_1
+all_markers <- FindAllMarkers(seurat_obj, only.pos = TRUE, logfc.threshold = 1, min.pct = 0.5, test.use = 'wilcox', verbose = FALSE)
+all_markers_filtered <- all_markers[all_markers$p_val_adj < 0.05, ]
+saveRDS(all_markers_filtered, file = file.path(data_dir, "all_markers.rds"))
+
+## Pseudobulk
+metagene_program_names <- as.character(unique(seurat_obj$signature_1))
+metagene_program_names <- metagene_program_names[order(metagene_program_names)]
+pseudobulk_mean <- NULL
+pseudobulk_median <- NULL
+for (metagene in metagene_program_names){
+  cm <- as.matrix(seurat_obj[["RNA"]]$counts[,seurat_obj$signature_1 == metagene])
+  pseudobulk_mean <- cbind(pseudobulk_mean, rowMeans(cm))
+  pseudobulk_median <- cbind(pseudobulk_median, rowMedians(cm))
+}
+colnames(pseudobulk_mean) <- colnames(pseudobulk_median) <- metagene_program_names
+rownames(pseudobulk_mean) <- rownames(pseudobulk_median) <- rownames(seurat_obj[["RNA"]]$counts)
+saveRDS(pseudobulk_mean, file = file.path(data_dir, "agg_cm_mean.rds"))
+saveRDS(pseudobulk_median, file = file.path(data_dir, "agg_cm_median.rds"))
+```
+
+```{r section_8b, echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE}
+
+################################################################################
+## ORA with previous ZFTA-RELA genesets
+################################################################################
+## Hierachical clustering 
+nmf_raw_data <- readRDS(file.path(data_dir, "nmf_raw_data.rds"))
+nmf_marker_genes_final <- readRDS(file.path(data_dir, "nmf_marker_genes_final.rds"))
+
+scores <- scoreNmfGenes(nmf_raw_data$cm_center, nmf_raw_data$cm_mean, c(nmf_marker_genes_final, ref_markers_previous_ZFTA))
+scores <- t(scores)
+scores_cor <- cor(scores)
+hc_res <- hclust(dist(1-scores_cor), method = "ward.D2")
+
+mat <- scores_cor[hc_res$order, hc_res$order]
+
+fontcolors <- ifelse(grepl('NMF_', rownames(mat)), 'red', 'darkgreen')
+fontfaces <- ifelse(grepl('NMF_', rownames(mat)), 'bold', 'plain')
+
+rowAnno <- rowAnnotation(rows = anno_text(rownames(mat), gp = gpar(fontface = fontfaces, col = fontcolors)))
+
+ht <- pheatmap::pheatmap(mat, 
+                         color = colorRampPalette(rev(brewer.pal(9, "RdBu"))[3:9])(100),
+                         cluster_rows = F, cluster_cols = F, show_rownames = T, show_colnames = F, silent = T)
+ht$gtable$grobs[[2]]$gp <- gpar(col = fontcolors, fontface = fontfaces)
+
+pdf(file.path(figure_dir, '4_metaprogram_cor_heatmap_Genesets_ZFTA_markers.pdf'), width = 12, height = 8)
+print(ht)
+invisible(dev.off())
+
+
+################################################################################
+## ORA with previous Gojo et al.  genesets
+################################################################################
+## Hierachical clustering 
+nmf_raw_data <- readRDS(file.path(data_dir, "nmf_raw_data.rds"))
+nmf_marker_genes_final <- readRDS(file.path(data_dir, "nmf_marker_genes_final.rds"))
+
+scores <- scoreNmfGenes(nmf_raw_data$cm_center, nmf_raw_data$cm_mean, c(nmf_marker_genes_final, ref_markers_Gojo))
+scores <- t(scores)
+scores_cor <- cor(scores)
+hc_res <- hclust(dist(1-scores_cor), method = "ward.D2")
+
+mat <- scores_cor[hc_res$order, hc_res$order]
+
+fontcolors <- ifelse(grepl('NMF_', rownames(mat)), 'red', 'darkgreen')
+fontfaces <- ifelse(grepl('NMF_', rownames(mat)), 'bold', 'plain')
+
+rowAnno <- rowAnnotation(rows = anno_text(rownames(mat), gp = gpar(fontface = fontfaces, col = fontcolors)))
+
+ht <- pheatmap::pheatmap(mat, 
+                         color = colorRampPalette(rev(brewer.pal(9, "RdBu"))[3:9])(100),
+                         cluster_rows = F, cluster_cols = F, show_rownames = T, show_colnames = F, silent = T)
+ht$gtable$grobs[[2]]$gp <- gpar(col = fontcolors, fontface = fontfaces)
+
+pdf(file.path(figure_dir, '4_metaprogram_cor_heatmap_Genesets_Gojo_2020.pdf'), width = 12, height = 8)
+print(ht)
+invisible(dev.off())
+
+
+################################################################################
+## ORA with previous GBM  genesets
+################################################################################
+## Hierachical clustering 
+nmf_raw_data <- readRDS(file.path(data_dir, "nmf_raw_data.rds"))
+nmf_marker_genes_final <- readRDS(file.path(data_dir, "nmf_marker_genes_final.rds"))
+
+scores <- scoreNmfGenes(nmf_raw_data$cm_center, nmf_raw_data$cm_mean, c(nmf_marker_genes_final, ref_markers[['GBM']]))
+scores <- t(scores)
+scores_cor <- cor(scores)
+hc_res <- hclust(dist(1-scores_cor), method = "ward.D2")
+
+mat <- scores_cor[hc_res$order, hc_res$order]
+
+fontcolors <- ifelse(grepl('NMF_', rownames(mat)), 'red', 'darkgreen')
+fontfaces <- ifelse(grepl('NMF_', rownames(mat)), 'bold', 'plain')
+
+rowAnno <- rowAnnotation(rows = anno_text(rownames(mat), gp = gpar(fontface = fontfaces, col = fontcolors)))
+
+ht <- pheatmap::pheatmap(mat, 
+                         color = colorRampPalette(rev(brewer.pal(9, "RdBu"))[3:9])(100),
+                         cluster_rows = F, cluster_cols = F, show_rownames = T, show_colnames = F, silent = T)
+ht$gtable$grobs[[2]]$gp <- gpar(col = fontcolors, fontface = fontfaces)
+
+pdf(file.path(figure_dir, '4_metaprogram_cor_heatmap_Genesets_GBM.pdf'), width = 12, height = 8)
+print(ht)
+invisible(dev.off())
+
+################################################################################
+## ORA with previous DMG  genesets
+################################################################################
+## Hierachical clustering 
+nmf_raw_data <- readRDS(file.path(data_dir, "nmf_raw_data.rds"))
+nmf_marker_genes_final <- readRDS(file.path(data_dir, "nmf_marker_genes_final.rds"))
+
+scores <- scoreNmfGenes(nmf_raw_data$cm_center, nmf_raw_data$cm_mean, c(nmf_marker_genes_final, ref_markers[['Midline']]))
+scores <- t(scores)
+scores_cor <- cor(scores)
+hc_res <- hclust(dist(1-scores_cor), method = "ward.D2")
+
+mat <- scores_cor[hc_res$order, hc_res$order]
+
+fontcolors <- ifelse(grepl('NMF_', rownames(mat)), 'red', 'darkgreen')
+fontfaces <- ifelse(grepl('NMF_', rownames(mat)), 'bold', 'plain')
+
+rowAnno <- rowAnnotation(rows = anno_text(rownames(mat), gp = gpar(fontface = fontfaces, col = fontcolors)))
+
+ht <- pheatmap::pheatmap(mat, 
+                         color = colorRampPalette(rev(brewer.pal(9, "RdBu"))[3:9])(100),
+                         cluster_rows = F, cluster_cols = F, show_rownames = T, show_colnames = F, silent = T)
+ht$gtable$grobs[[2]]$gp <- gpar(col = fontcolors, fontface = fontfaces)
+
+pdf(file.path(figure_dir, '4_metaprogram_cor_heatmap_Genesets_DMG.pdf'), width = 12, height = 8)
+print(ht)
+invisible(dev.off())
+
+
+
+```
+
+```{r section_8_plot, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE, fig.width = 12, fig.height = 8}
+print(ht)
+```
+
+```{r section_9, echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE}
+## Enrichment using hypergeometric test
+# all_markers_filtered <- readRDS(file.path(data_dir, "all_markers.rds"))
+# seurat_obj <- readRDS(file.path(data_dir, "seurat_obj.rds"))
+# 
+# markers <- split(all_markers_filtered, all_markers_filtered$cluster); markers <- lapply(markers, function(x) unique(x$gene))
+# 
+# enrichment.matrix <- BuildEnrichmentMatrix(genes = rownames(seurat_obj), db = c(ref_markers_previous_ZFTA))
+# go_matrix <- pbapply::pbsapply(markers, function(tbl){
+#   Enrichment(geneset = tbl, enrichment.matrix = enrichment.matrix, type = 'GO')
+# })
+# go_3 <- lapply(colnames(go_matrix), function(cluster){sort(go_matrix[,cluster])[1:3]})
+# names(go_3) <- names(markers)
+# go_matrix <- -log10(go_matrix+0.00000001)
+# 
+# mat <- go_matrix[unique(gsub(".*\\.", "", names(unlist(go_3)))), ]
+# 
+# pheatmap::pheatmap(mat, 
+#                    color = colorRampPalette(brewer.pal(n = 11, name = "PiYG")[6:11])(100),
+#                    treeheight_row = 0, treeheight_col = 0, 
+#                    cluster_rows = T, cluster_cols = T, show_colnames = T, angle_col = '45', 
+#                    filename = file.path(figure_dir, '4_metaprogram_phyper_heatmap_Genesets_ZFTA_previous.pdf'), width = 8, height = 6)
+```
+
+```{r section_9_plot, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 6}
+# pheatmap::pheatmap(mat, 
+#                    color = colorRampPalette(brewer.pal(n = 11, name = "PiYG")[6:11])(100),
+#                    treeheight_row = 0, treeheight_col = 0, 
+#                    cluster_rows = T, cluster_cols = T, show_colnames = T, angle_col = '45')
+```
+
+### Defining programs
+```{r section_annotated, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 6}
+programs_def <- c('NMF_1' = 'Neuroepithelial-like', 
+                  'NMF_4' = 'MES-like', 
+                  'NMF_7' = 'Ependymal-like', 
+                  'NMF_10' = 'Radial-glia-like',
+                  'NMF_13' = 'Cycling',
+                  'NMF_14' = 'Embryonic/neuronal-like',
+                  'NMF_16' = 'Neuronal-like',
+                  'NMF_17' = 'Embryonic-like')
+
+names(nmf_programs) <- plyr::mapvalues(names(nmf_programs), names(programs_def), unname(programs_def), warn_missing = FALSE)
+```
+
+```{r section_annotated_1, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE}
+################################################################################
+## Compute top30 marker genes and diagnostic statistics for merged metagene programs 
+################################################################################
+program_names <- names(nmf_programs)
+nmf_marker_genes_final <- list()
+nmf_programs_stats <- list()
+
+for (i in seq(length(program_names))){
+  nmf_marker_genes_final[[program_names[[i]]]] <- mergeNmfGenes(nmf_basis_concat, nmf_programs[[i]], n =30) ## Metaprogram marker genes 
+  nmf_programs_stats[[program_names[[i]]]] <- calculateNmfProgramStats(nmf_basis_concat, nmf_programs[[i]]) ## Metaprogram statistics
+}
+saveRDS(nmf_marker_genes_final, file = file.path(data_dir, "nmf_marker_genes_final_annotated.rds"))
+saveRDS(nmf_programs_stats, file = file.path(data_dir, "nmf_program_stats_annotated.rds"))
+
+################################################################################
+## Compute metagene scores for metagene programs
+################################################################################
+num_metagenes <- length(nmf_marker_genes_final)
+nmf_score_final <- scoreNmfGenes(cm_center, cm_mean, nmf_marker_genes_final)
+nmf_score_final <- t(nmf_score_final)
+
+################################################################################
+## Compute metagene scores for metagene programs - fresh
+################################################################################
+seurat_obj_fresh <- readRDS(file = file.path(base_dir, "analysis/infercnv/fresh/seurat_obj_malignant.rds"))
+# remove non malignant and observations
+Idents(seurat_obj_fresh) <- 'cnv'
+seurat_obj_fresh <- subset(seurat_obj_fresh, idents = 'TRUE')
+
+cm_fresh <- seurat_obj_fresh[["RNA"]]$counts
+cm_norm_fresh <- as.matrix(log2(cm_fresh/10+1))
+cm_mean_fresh <- log2(Matrix::rowMeans(cm_fresh)+1)
+cm_center_fresh <- cm_norm_fresh - rowMeans(cm_norm_fresh)
+
+nmf_score_final_fresh <- scoreNmfGenes(cm_center_fresh, cm_mean_fresh, nmf_marker_genes_final)
+nmf_score_final_fresh <- t(nmf_score_final_fresh)
+
+num_meta_program <- length(nmf_marker_genes_final)
+nmf_score_final_t_fresh <- data.frame(nmf_score_final_fresh)
+for (i in 1:3){
+  nmf_score_final_t_fresh <- metagene_score_signature(nmf_score_final_t_fresh, num_meta_program, i)
+}
+
+nmf_score_final_t_fresh$signature_1 <- gsub('\\.', '-', nmf_score_final_t_fresh$signature_1)
+nmf_score_final_t_fresh$signature_2 <- gsub('\\.', '-', nmf_score_final_t_fresh$signature_2)
+nmf_score_final_t_fresh$signature_3 <- gsub('\\.', '-', nmf_score_final_t_fresh$signature_3)
+
+meta_fresh <- nmf_score_final_t_fresh
+metadata_fresh <- seurat_obj_fresh@meta.data
+metadata_fresh <- cbind(metadata_fresh, meta_fresh)
+
+seurat_obj_fresh <- AddMetaData(seurat_obj_fresh, metadata_fresh)
+saveRDS(seurat_obj_fresh, file.path(base_dir, "analysis/infercnv/fresh/seurat_obj_malignant_annotated.rds"))
+
+################################################################################
+## Compute and save metagene scores and 1-3 highest metagene programs and scores
+################################################################################
+num_meta_program <- length(nmf_marker_genes_final)
+nmf_score_final_t <- data.frame(nmf_score_final)
+for (i in 1:3){
+  nmf_score_final_t <- metagene_score_signature(nmf_score_final_t, num_meta_program, i)
+}
+
+nmf_score_final_t$signature_1 <- gsub('\\.', '-', nmf_score_final_t$signature_1)
+nmf_score_final_t$signature_2 <- gsub('\\.', '-', nmf_score_final_t$signature_2)
+nmf_score_final_t$signature_3 <- gsub('\\.', '-', nmf_score_final_t$signature_3)
+
+saveRDS(nmf_score_final_t, file = file.path(data_dir, "nmf_score_annotated.rds"))
+
+
+################################################################################
+## Reprocessing data
+################################################################################
+meta <- nmf_score_final_t
+metadata <- seurat_obj@meta.data
+metadata <- cbind(metadata, meta)[colnames(nmf_raw_data$cm),]
+
+seurat_obj <- RunFullSeurat_v5(cm = nmf_raw_data$cm, metadata = metadata,  doBatch = T, var2batch = 'sample', batchMethod = 'harmony', project = 'EPN')
+saveRDS(seurat_obj, file.path(data_dir, 'seurat_obj.rds'))
+
+
+seurat_obj_NMF <- readRDS(file.path(data_dir, 'seurat_obj.rds'))
+seurat_obj$NMF <- plyr::mapvalues(Cells(seurat_obj), names(seurat_obj_NMF$signature_1), unname(seurat_obj_NMF$signature_1), warn_missing = FALSE)
+qsave(seurat_obj, file.path(data_dir, 'seurat_obj_annotated.qs'))
+
+
+################################################################################
+## Save metaprogram genes
+################################################################################
+tmp <- matrix(unlist(nmf_marker_genes_final), ncol = length(nmf_marker_genes_final))
+colnames(tmp) <- names(nmf_marker_genes_final)
+tmp <- data.frame(tmp)
+write.table(tmp, file = file.path(data_dir, "metaprogram_genes_annotated.txt"), sep = "\t", quote = F, row.names = F, col.names = T)
+```
+
+```{r section_annotated_2, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE}
+################################################################################
+## GO enrichment
+################################################################################
+enrichment.matrix <- BuildEnrichmentMatrix(genes = rownames(seurat_obj), type = 'GO')
+go_matrix <- pbapply::pbsapply(nmf_marker_genes_final, function(tbl){
+  Enrichment(geneset = tbl, enrichment.matrix = enrichment.matrix, type = 'GO')
+})
+go_3 <- lapply(colnames(go_matrix), function(cluster){sort(go_matrix[,cluster])[1:5]})
+names(go_3) <- names(nmf_marker_genes_final)
+go_matrix <- -log10(go_matrix+0.00000001)
+
+mat <- go_matrix[unique(gsub(".*\\.", "", names(unlist(go_3)))), ]
+
+pheatmap::pheatmap(mat, color = colorRampPalette(brewer.pal(n = 11, name = "PiYG")[6:11])(100),
+                   cluster_rows = F, cluster_cols = F, show_colnames = T, 
+                   angle_col = '45', fontsize_row = 5, fontsize_col = 6, 
+                   filename = file.path(figure_dir, '3_go_result_metagene_DEGs_annotated.pdf'), width = 8, height = 6)
+rm(enrichment.matrix); invisible(gc())
+```
+
+```{r section_annotated_2_plot, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 6}
+pheatmap::pheatmap(mat, color = colorRampPalette(brewer.pal(n = 11, name = "PiYG")[6:11])(100),
+                   cluster_rows = F, cluster_cols = F, show_colnames = T, 
+                   angle_col = '45', fontsize_row = 5, fontsize_col = 6)
+```
+
+```{r section_annotated_3, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE}
+## Markers
+seurat_obj <- qread(file.path(data_dir, "seurat_obj_annotated.qs"))
+Idents(seurat_obj) <- seurat_obj$signature_1
+all_markers <- FindAllMarkers(seurat_obj, only.pos = TRUE, logfc.threshold = 1, min.pct = 0.5, test.use = 'MAST', verbose = FALSE)
+all_markers_filtered <- all_markers[all_markers$p_val_adj < 0.05, ]
+saveRDS(all_markers_filtered, file = file.path(data_dir, "all_markers_annotated.rds"))
+
+## Pseudobulk
+metagene_program_names <- as.character(unique(seurat_obj$signature_1))
+metagene_program_names <- metagene_program_names[order(metagene_program_names)]
+pseudobulk_mean <- NULL
+pseudobulk_median <- NULL
+for (metagene in metagene_program_names){
+  cm <- as.matrix(seurat_obj[["RNA"]]$counts[,seurat_obj$signature_1 == metagene])
+  pseudobulk_mean <- cbind(pseudobulk_mean, rowMeans(cm))
+  pseudobulk_median <- cbind(pseudobulk_median, rowMedians(cm))
+}
+colnames(pseudobulk_mean) <- colnames(pseudobulk_median) <- metagene_program_names
+rownames(pseudobulk_mean) <- rownames(pseudobulk_median) <- rownames(seurat_obj[["RNA"]]$counts)
+saveRDS(pseudobulk_mean, file = file.path(data_dir, "agg_cm_mean_annotated.rds"))
+saveRDS(pseudobulk_median, file = file.path(data_dir, "agg_cm_median_annotated.rds"))
+```
+
+```{r section_annotated_4, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE}
+## Enrichment using hypergeometric test
+# all_markers_filtered <- readRDS(file.path(data_dir, "all_markers_annotated.rds"))
+# seurat_obj <- readRDS(file.path(data_dir, "seurat_obj_annotated.rds"))
+# 
+# markers <- split(all_markers_filtered, all_markers_filtered$cluster); markers <- lapply(markers, function(x) unique(x$gene))
+# 
+# enrichment.matrix <- BuildEnrichmentMatrix(genes = rownames(seurat_obj), db = c(ref_markers_previous_ZFTA))
+# go_matrix <- pbapply::pbsapply(markers, function(tbl){
+#   Enrichment(geneset = tbl, enrichment.matrix = enrichment.matrix, type = 'GO')
+# })
+# go_3 <- lapply(colnames(go_matrix), function(cluster){sort(go_matrix[,cluster])[1:3]})
+# names(go_3) <- names(markers)
+# go_matrix <- -log10(go_matrix+0.00000001)
+# 
+# mat <- go_matrix[unique(gsub(".*\\.", "", names(unlist(go_3)))), ]
+# 
+# pheatmap::pheatmap(mat, 
+#                    color = colorRampPalette(brewer.pal(n = 11, name = "PiYG")[6:11])(100),
+#                    treeheight_row = 0, treeheight_col = 0, 
+#                    cluster_rows = T, cluster_cols = T, show_colnames = T, angle_col = '45', 
+#                    filename = file.path(figure_dir, '4_metaprogram_phyper_heatmap_Genesets_annotated.pdf'), width = 8, height = 6)
+```
+
+```{r section_annotated_4_plot, echo = FALSE, eval = TRUE, message = FALSE, warning = FALSE, fig.width = 8, fig.height = 6}
+# pheatmap::pheatmap(mat, 
+#                    color = colorRampPalette(brewer.pal(n = 11, name = "PiYG")[6:11])(100),
+#                    treeheight_row = 0, treeheight_col = 0, 
+#                    cluster_rows = T, cluster_cols = T, show_colnames = T, angle_col = '45')
+```
+
+
+### Plotting results
+```{r section_10, echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE, fig.width = 10, fig.height = 6}
+## Load precomputed cm_mean, cm_center, basis and samples in the list 
+fname <- file.path(data_dir, "nmf_raw_data.rds")
+if(file.exists(fname)){
+  nmf_raw_data <- readRDS(fname)
+  
+  cm_mean <- nmf_raw_data$cm_mean
+  cm_center <- nmf_raw_data$cm_center
+  nmf_basis_concat <- nmf_raw_data$basis
+  samples <- nmf_raw_data$samples
+  
+  nmf_score <- nmf_raw_data[["nmf_score"]]
+  nmf_factor_cor <- nmf_raw_data[["nmf_factor_cor"]]
+  
+  rm(nmf_raw_data); invisible(gc()); invisible(gc()); invisible(gc())
+}
+
+
+## Load precomputed nmf metaprograms 
+nmf_prog_fname <- file.path(data_dir, "nmf_marker_genes_final_annotated.rds")
+if (file.exists(nmf_prog_fname)){
+  nmf_marker_genes_final <- readRDS(nmf_prog_fname)
+}
+
+
+## Load precomputed nmf score and signature
+nmf_score_fname <- file.path(data_dir, "nmf_score_annotated.rds")
+if (file.exists(nmf_score_fname)){
+  nmf_score_final_t <- readRDS(nmf_score_fname)
+}
+
+
+## Load precomputed nmf score and signature (original)
+nmf_score_fname_original <- file.path(data_dir, "nmf_score.rds")
+if (file.exists(nmf_score_fname_original)){
+  nmf_score_final_t_original <- readRDS(nmf_score_fname_original)
+}
+
+
+## Load seurat object with NMF infos
+seurat_obj <- file.path(data_dir, "seurat_obj_annotated.qs")
+if (file.exists(nmf_score_fname)){
+  seurat_obj <- qread(seurat_obj)
+}
+
+
+## Load all filtered markers
+all_markers <- file.path(data_dir, "all_markers_annotated.rds")
+if (file.exists(all_markers)){
+  all_markers <- readRDS(all_markers)
+}
+
+## Heatmap for metagene scores
+metagene_order <- sort(unique(nmf_score_final_t$signature_1))
+metagene_order_NMF <- gtools::mixedsort(unique(nmf_score_final_t_original$signature_1))
+  
+## Sort cells based on expressed program 
+## Make a sidebar to show sample origin
+cell_order <- nmf_score_final_t$signature_1
+names(cell_order) <- rownames(nmf_score_final_t)
+cell_order <- factor(cell_order, levels = metagene_order)
+cell_order <- cell_order[order(cell_order)]
+samples_vec <- data.frame("samples_vec" = cell_order)
+
+## Sort cells and metaprograms (cells: expressed program; metaprograms: specified order)
+nmf_score_final <- nmf_score_final_t[,1:length(metagene_order)]
+nmf_score_final_sorted <- nmf_score_final[rownames(samples_vec), gsub('-', '.', metagene_order)]
+nmf_score_final_sorted <- as.matrix(nmf_score_final_sorted)
+
+## Trim values
+nmf_score_final_sorted_heatmap <- ifelse(nmf_score_final_sorted > 3, 3, ifelse(nmf_score_final_sorted < -3, -3, nmf_score_final_sorted))
+
+## Replace "_" with "-" for colnames
+colnames(nmf_score_final_sorted_heatmap) = gsub("\\.", "-", colnames(nmf_score_final_sorted_heatmap))
+
+## heatmap for NMF scores
+hm_colors <- rev(brewer.pal(n=9, name="RdBu"))
+hm_colors <- colorRampPalette(colors = hm_colors)
+pdf(file.path(figure_dir, "5_nmf_cell_score_sorted_annotated.pdf"), width = 10, height = 6, onefile = F)
+aheatmap(t(nmf_score_final_sorted_heatmap), 
+         color = hm_colors(100), 
+         Rowv = NA, Colv = NA, labCol = NA,
+         fontsize = 8, cexRow = 1)
+invisible(dev.off())
+
+aheatmap(t(nmf_score_final_sorted_heatmap), 
+         color = hm_colors(100), 
+         Rowv = NA, Colv = NA, labCol = NA,
+         fontsize = 8, cexRow = 1)
+
+
+## Heatmap for metagene marker genes 
+## heatmap for expressions of genes in merged NMF factors 
+hm_colors <- rev(brewer.pal(n=9, name="RdBu"))
+hm_colors <- colorRampPalette(colors = hm_colors)
+cm_heatmap <- ifelse(cm_center > 3, 3, ifelse(cm_center < -3, -3, cm_center))
+
+## Only keep genes that are also in this dataset 
+tmp_nmf_marker_genes_final <- nmf_marker_genes_final
+names(tmp_nmf_marker_genes_final) <- paste0(names(tmp_nmf_marker_genes_final), '_')
+
+nmf_marker_genes <- unlist(tmp_nmf_marker_genes_final[paste0(metagene_order, '_')])
+nmf_marker_genes <- nmf_marker_genes[nmf_marker_genes %in% rownames(cm_center)]
+
+## Prepare row annotations 
+nmf_marker_gene_vec <- factor(unlist(lapply(strsplit(names(nmf_marker_genes), '_'), `[[`, 1)), levels = metagene_order)
+
+cols_to_use <- structure(colors_to_use[1:length(metagene_order)], names = metagene_order)
+cols_to_use_NMF <- structure(colors_to_use[1:length(metagene_order_NMF)], names = metagene_order_NMF)
+
+## Plot
+pdf(file.path(figure_dir, "6_nmf_marker_gene_expr.pdf"), width = 10, height = 6, onefile = F)
+aheatmap(cm_heatmap[nmf_marker_genes, rownames(samples_vec)], 
+         color = hm_colors(100), labCol = NA, labRow = NA,
+         Rowv = NA, Colv = NA, 
+         annRow = nmf_marker_gene_vec, annCol = samples_vec, annColors = list(cols_to_use[levels(nmf_marker_gene_vec)], cols_to_use[levels(nmf_marker_gene_vec)]))
+invisible(dev.off())
+
+aheatmap(cm_heatmap[nmf_marker_genes, rownames(samples_vec)], 
+         color = hm_colors(100), labCol = NA, labRow = NA,
+         Rowv = NA, Colv = NA, 
+         annRow = nmf_marker_gene_vec, annCol = samples_vec, annColors = list(cols_to_use[levels(nmf_marker_gene_vec)], cols_to_use[levels(nmf_marker_gene_vec)]))
+```
+
+```{r section_11, echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE, fig.width = 10, fig.height = 6}
+colnames(nmf_score_final_t) <- gsub('\\.', '-', colnames(nmf_score_final_t))
+
+## Hierarchical clustering on metagene programs 
+num_metagenes <- length(nmf_marker_genes_final)
+tmp <- nmf_score_final_t[,1:num_metagenes]
+pairwise_cor <- cor(tmp[,1:num_metagenes])
+pairwise_dist <- 1 - pairwise_cor
+hc <- hclust(dist(pairwise_dist), method = "ward.D2")
+plot(as.dendrogram(hc))
+```
+
+```{r section_12, echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE, fig.width = 15, fig.height = 8}
+## Proportion of metagene programs in each sample
+## Define orders and colors for the bar graph
+sample_order <- unique(seurat_obj$sample)
+
+plotProportion(seurat_obj$sample, nmf_score_final_t_original$signature_1,
+               unique(seurat_obj$sample), 
+               metagene_order_NMF,
+               c("Sample", "Annotation", "Proportion"),
+               "Sample", "Proportion", "Annotation", 
+               cols_to_use_NMF[metagene_order_NMF],
+               y_title = "Proportion")
+ggsave("7_proportion-sample_vs_metagene.pdf", path = figure_dir, width = 15, height = 8)
+
+plotProportion(seurat_obj$sample, nmf_score_final_t$signature_1,
+               unique(seurat_obj$sample), 
+               metagene_order,
+               c("Sample", "Annotation", "Proportion"),
+               "Sample", "Proportion", "Annotation", 
+               cols_to_use[levels(nmf_marker_gene_vec)],
+               y_title = "Proportion")
+ggsave("7_proportion-sample_vs_metagene_annotated.pdf", path = figure_dir, width = 15, height = 8)
+```
+
+```{r section_13, echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE, fig.width = 15, fig.height = 8}
+## Barplot of each sample in each metaprogram
+plotProportion(x = nmf_score_final_t_original$signature_1, y = seurat_obj$sample, 
+               x_order = metagene_order_NMF, 
+               y_order = unique(seurat_obj$sample), 
+               col_names = c("Annotation", "Sample", "Proportion"),
+               x_var = "Annotation", y_var = "Proportion", fill_var = "Sample", 
+               colors = paletteer::paletteer_c("scico::roma", n = length(unique(seurat_obj$sample))),
+               y_title = "Proportion")
+ggsave("8_proportion-metagene_vs_sample.pdf", path = figure_dir, width = 15, height = 8)
+
+plotProportion(x = nmf_score_final_t$signature_1, y = seurat_obj@meta.data$sample, 
+               x_order = metagene_order, 
+               y_order = unique(seurat_obj@meta.data$sample), 
+               col_names = c("Annotation", "Sample", "Proportion"),
+               x_var = "Annotation", y_var = "Proportion", fill_var = "Sample", 
+               colors = paletteer::paletteer_c("scico::roma", n = length(unique(seurat_obj@meta.data$sample))),
+               y_title = "Proportion")
+ggsave("8_proportion-metagene_vs_sample_annotated.pdf", path = figure_dir, width = 15, height = 8)
+```
+
+```{r section_14, echo = TRUE, eval = TRUE, message = FALSE, warning = FALSE, fig.width = 15, fig.height = 6}
+## change names of clusters
+seurat_obj$Metaprogram <- plyr::mapvalues(seurat_obj$signature_1, names(programs_def), unname(programs_def), warn_missing = FALSE)
+qsave(seurat_obj, file.path(data_dir, 'seurat_obj_annotated.qs'))
+
+
+## UMAP for samples and signature
+pt1 <- do_DimPlot(sample = seurat_obj, group.by = 'sample', border.size = 1, legend.position = 'right', pt.size = 1, colors.use = structure(paletteer::paletteer_c("scico::roma", n = length(unique(seurat_obj@meta.data$sample))), names = unique(seurat_obj$sample))) + ggtitle('Samples') + seurat_theme()
+pt2 <- do_DimPlot(sample = seurat_obj, group.by = 'Metaprogram', border.size = 1, legend.position = 'right', pt.size = 1, colors.use = cols_to_use[levels(nmf_marker_gene_vec)]) + ggtitle('Metaprograms') + seurat_theme()
+pt1 | pt2
+ggsave(file.path(figure_dir, "9_umap.pdf"), width = 15, height = 6)
+
+## tSNE based on score for each NMF
+set.seed(123456)
+tsne <- Rtsne(nmf_score_final_t[,1:num_metagenes], max_iter = 1000, perplexity = 30, verbose = FALSE)$Y
+
+rownames(tsne) <- rownames(Embeddings(seurat_obj, "umap.harmony"))
+colnames(tsne) <- c('tSNE_1', 'tSNE_2')
+seurat_obj@reductions$tsne_score <- seurat_obj@reductions$umap.harmony
+seurat_obj@reductions$tsne_score@cell.embeddings <- as.matrix(tsne[Cells(seurat_obj), ])
+seurat_obj@reductions$tsne_score@key <- "tSNE_"
+
+
+pt1 <- do_DimPlot(sample = seurat_obj, reduction = 'tsne_score', group.by = 'Metaprogram', border.size = 1, legend.position = 'right', pt.size = 1, colors.use = cols_to_use[levels(nmf_marker_gene_vec)]) + ggtitle('Metaprograms') + seurat_theme()
+pt2 <- do_DimPlot(sample = seurat_obj, reduction = 'tsne_score', group.by = 'sample', border.size = 1, legend.position = 'right', pt.size = 1, colors.use = structure(paletteer::paletteer_c("scico::roma", n = length(unique(seurat_obj@meta.data$sample))), names = unique(seurat_obj$sample))) + ggtitle('Sample') + seurat_theme()
+pt1 | pt2
+ggsave(file.path(figure_dir, "10_nmf_score_tsne.pdf"), width = 15, height = 6)
+
+pt1 <- do_DimPlot(sample = seurat_obj, reduction = 'umap.harmony', group.by = 'Metaprogram', border.size = 1, legend.position = 'right', pt.size = 1, colors.use = cols_to_use[levels(nmf_marker_gene_vec)]) + ggtitle('Metaprograms') + seurat_theme()
+pt2 <- do_DimPlot(sample = seurat_obj, reduction = 'umap.harmony', group.by = 'sample', border.size = 1, legend.position = 'right', pt.size = 1, colors.use = structure(paletteer::paletteer_c("scico::roma", n = length(unique(seurat_obj@meta.data$sample))), names = unique(seurat_obj$sample))) + ggtitle('Sample') + seurat_theme()
+pt1 | pt2
+ggsave(file.path(figure_dir, "10_nmf_score_umap_harmony.pdf"), width = 15, height = 6)
+
+## Dotplot for top markers by NMF
+gene_list <- list(`Progenitor-like` = nmf_marker_genes_final$`Progenitor-like`[1:5], 
+                  `Neuroepithelial-like` = nmf_marker_genes_final$`Neuroepithelial-like`[1:5], 
+                  `MES-like` = nmf_marker_genes_final$`MES-like`[1:5],
+                  `Ependymal-like` = nmf_marker_genes_final$`Ependymal-like`[1:5],
+                  `Radial-glia-like` = nmf_marker_genes_final$`Radial-glia-like`[1:5],
+                  `NPC-like` = nmf_marker_genes_final$`NPC-like`[1:5],
+                  `NPC-like2` = nmf_marker_genes_final$`NPC-like2`[1:5],
+                  `Cycling` = nmf_marker_genes_final$`Cycling`[1:5])
+
+
+SCpubr::do_DotPlot(sample = seurat_obj, 
+                   features = gene_list, 
+                   scale = T,
+                   #cluster.idents = F, 
+                   group.by = 'Metaprogram',
+                   flip = FALSE,
+                   #rotate_x_axis_labels = 45
+                   ) 
+ggsave(file.path(figure_dir, "11_DotPlot_Markers.pdf"), width = 15, height = 6)
+```
+
+
+
