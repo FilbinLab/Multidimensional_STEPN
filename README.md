@@ -1,6 +1,7 @@
 # Multidimensional_STEPN
 
-Code repository for single-cell multidimensional profiling of supratentorial ependymomas.
+Code repository for single-cell multidimensional profiling of supratentorial ependymomas, preprint: https://www.biorxiv.org/content/10.1101/2024.08.07.607066v1
+
 Raw data are deposited in GEO, and processed data is pending. 
 
 Contact: daeun_jeong at dfci.harvard.edu, sarag_danielli at dfci.harvard.edu
