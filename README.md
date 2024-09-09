@@ -2,7 +2,7 @@
 
 Code repository for single-cell multidimensional profiling of supratentorial ependymomas, preprint: https://www.biorxiv.org/content/10.1101/2024.08.07.607066v1
 
-Raw data for scRNAseq and 10X Xenium are deposited on gene expression omnibus (GEO) under accession number gene expression omnibus (GEO) under accession number GSE260452, and processed data depository is pending. 
+Raw data for scRNAseq and 10X Xenium are deposited on gene expression omnibus (GEO) under accession number GSE260452, and processed data depository is pending. 
 
 Contact: daeun_jeong at dfci.harvard.edu, sarag_danielli at dfci.harvard.edu, carlosa_biagijunior at dfci.harvard.edu
 
