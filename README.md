@@ -1,13 +1,21 @@
 # Multidimensional_STEPN
 
+Code repository for single-cell multidimensional profiling of supratentorial ependymomas.
+Raw data are deposited in GEO, and processed data is pending. 
 
+Contact: daeun_jeong at dfci.harvard.edu, sarag_danielli at dfci.harvard.edu
+
+# Overview
+0. Software version requirements 
 1. sc/snRNA-seq Preprocessing
 2. Plots
 3. Pseudobulk analysis (projections & plots)
 4. Xenium (preprocessing, spatial coherence, niche, neighborhood enrichment, cellchat)
 5. Co-culture (preprocessing, analysis, plots)  
 
+## 0. Software version requirements 
 
+All code was run in R version 4.3.1, Python v3.10.11, and Seurat v.5.0.2. 
 
 ## 1. sc/snRNA-seq Preprocessing
 Codes to process sc/snRNA-seq data from ST-EPN patient samples. Codes are ordered logically, from QC-filtering (`1-filtering.R`) to inferCNV to determine malignant/non-malignant cells (the code is different for fresh and frozen samples - `3a-infercnv_frozen_step1_part1.R`, `3b-infercnv_fresh_step1_part1.R`, `4a-infercnv_frozen_step2.R`, `4b-infercnv_fresh_step2.R`, `5a-infercnv_frozen_step3.R`, `5b-infercnv_fresh_step3.R`), to preparing counts for NMF (`6-prepare_nmf_counts.R` and `6b-prepare_nmf_counts_fresh.R`), to running NMF (`7-NMF_rank-forO2.R`) and visualizing NMF results (`8-NMF.Rmd`)
@@ -15,7 +23,6 @@ Codes to process sc/snRNA-seq data from ST-EPN patient samples. Codes are ordere
 Final datasets are cleaned up, annotated and reprocessed using `9_Cleanup_datasets.R` and `10_classification_malignant_normal.R`
 
 Code to display oncoprint of figure 1 is also there (`Oncoprint.R`)
-
 
 ## 2. Plots
 Codes to plot most paper figures from ST-EPN patient samples
@@ -30,7 +37,6 @@ The folder contains the following subfolders:
 `3-neighborhood`: Python code to calculate cellular neighborhoods
 `4-spatial_coherence`: code to display the spatial coherence results
 
-
 ## 5.Co-culture
 Experiment to determine the cell state shifts between EP1NS cells cultures alone (monoculture) or with rat neurons and astrocytes (coculture).
 In total, 3x4 plates coculture and 1x4 plates monoculture were sequenced. 1x run of coculture was bad QC, and therefore removed.
@@ -41,4 +47,4 @@ The remaining goodQC runs are stored under the following folders:
 231103 - MonoCulture, 4 plates `/labs/mfilbin/homes/biagi/Demultiplexing/231103`
 
 ## 6.Preclinical_models
-Codes to visualize FIg E10a/b
+Codes to visualize Fig E10a/b
