@@ -39,12 +39,6 @@ The folder contains the following subfolders:
 
 ## 5.Co-culture
 Experiment to determine the cell state shifts between EP1NS cells cultures alone (monoculture) or with rat neurons and astrocytes (coculture).
-In total, 3x4 plates coculture and 1x4 plates monoculture were sequenced. 1x run of coculture was bad QC, and therefore removed.
-The remaining goodQC runs are stored under the following folders:
-
-231207 - CoCulture, 4 plates `/labs/mfilbin/Demultiplexing/231207`
-231116 - CoCulture, 4 plates `/labs/mfilbin/homes/biagi/Demultiplexing/231116` 
-231103 - MonoCulture, 4 plates `/labs/mfilbin/homes/biagi/Demultiplexing/231103`
 
 ## 6.Preclinical_models
 Codes to visualize Fig E10a/b
