@@ -2,7 +2,7 @@
 
 Code repository for single-cell multidimensional profiling of supratentorial ependymomas, preprint: https://www.biorxiv.org/content/10.1101/2024.08.07.607066v1
 
-Raw data are deposited in GEO, and processed data is pending. 
+Raw data for scRNAseq and 10X Xenium are deposited on gene expression omnibus (GEO) under accession number gene expression omnibus (GEO) under accession number GSE260452, and processed data depository is pending. 
 
 Contact: daeun_jeong at dfci.harvard.edu, sarag_danielli at dfci.harvard.edu, carlosa_biagijunior at dfci.harvard.edu
 
@@ -31,7 +31,7 @@ Codes to plot most paper figures from ST-EPN patient samples
 ## 3. Pseudobulk analysis 
 Codes to plot Extended figure 3 and to plot developmental projections of Fig. 1f and Fig E2a. To prepare the reference datasets, the codes stored in the folder `Developmental_dataset_processing` are used.
 
-## 4. Xenium
+## 4. 10X Xenium
 The folder contains the following subfolders:
 `1-preprocessing`: to annotate Xenium cells with tumor cell states/types
 `2-plots`: to display spatial maps
