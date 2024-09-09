@@ -4,7 +4,7 @@ Code repository for single-cell multidimensional profiling of supratentorial epe
 
 Raw data are deposited in GEO, and processed data is pending. 
 
-Contact: daeun_jeong at dfci.harvard.edu, sarag_danielli at dfci.harvard.edu
+Contact: daeun_jeong at dfci.harvard.edu, sarag_danielli at dfci.harvard.edu, carlosa_biagijunior at dfci.harvard.edu
 
 # Overview
 0. Software version requirements 
