@@ -65,3 +65,7 @@ while IFS=, read -r SampleName SampleID; do
   sh /n/scratch/users/s/sad167/EPN/Xenium/scripts_revisions/3c_NicheAnalysis.sh $SampleName
 done < /n/scratch/users/s/sad167/EPN/Xenium/scripts_revisions/SampleIdentifier.csv
 ```
+
+
+## 5. Plot
+All scripts to plot final results can be found in the `plot` folder.

@@ -324,6 +324,16 @@ XeniumCellAssignment <- function(seurat_object_path, Xenium_dir, marker_genes_li
 
     qsave(data, file.path(data_dir, paste0('seurat_obj_', basename(Xenium_dir), '.qs')))
     
+    
+    # export cell ID
+    cell_id <- data.frame(rownames(data@meta.data), data@meta.data$cell_type)
+    
+    # rename column names
+    colnames(cell_id)[colnames(cell_id) == "rownames.data.meta.data."] <- "cell_id"
+    colnames(cell_id)[colnames(cell_id) == "data.meta.data.cell_type"] <- "group"
+    # save
+    write_csv(cell_id, file.path(data_dir, paste0('cell_ID_', basename(Xenium_dir), ".csv")))
+    
   
 }
 

@@ -37,6 +37,8 @@ if (!dir.exists(data_dir)){dir.create(data_dir, recursive = T)}
 
 resource_dir  <- file.path(base_dir, 'scripts_revisions/resources')
 source(file.path(resource_dir, 'color_palette.R'))
+source(file.path(resource_dir, "xenium_preprocessing_helper_functions_SD_v2.R"))
+
 
 
 # read metadata ---------------------------------------------------------
