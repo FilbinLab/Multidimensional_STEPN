@@ -22,16 +22,16 @@ RunFullXenium <- function(smp, rawDir, outDir) {
   ## Preprocessing seurat objects
   message(green('-------------------------------------------------------'))
   message(blue(glue('Starting pre-processing for sample: {yellow$underline$bold(smp)}!!')))
-  message(blue('[1/8] Loading Xenium raw files...'))
+  message(blue('[1/3] Loading Xenium raw files...'))
   
   suppressWarnings(suppressMessages(xenium.obj <- LoadXenium(rawDir, fov = "fov")))
   xenium.obj <- subset(xenium.obj, subset = nCount_Xenium > 0)
   message(glue("{ncol(xenium.obj)} cells."))
   
-  message(blue('[2/8] Running SCTransform-based normalization...'))
+  message(blue('[2/3] Running SCTransform-based normalization...'))
   xenium.obj <- SCTransform(xenium.obj, assay = "Xenium", vars.to.regress = c('nFeature_Xenium', 'nCount_Xenium'), vst.flavor = "v2", verbose = FALSE)
   
-  message(blue('[3/8] Running PCA and UMAP reductions...'))
+  message(blue('[3/3] Running PCA and UMAP reductions...'))
   xenium.obj <- RunPCA(xenium.obj, npcs = 50, features = rownames(xenium.obj), verbose = FALSE)
   xenium.obj <- RunUMAP(xenium.obj, dims = 1:optimizePCA(xenium.obj, 0.8), verbose = FALSE)
   
@@ -368,4 +368,95 @@ NicheAnalysis <- function(input_dir, output_dir,
   qsave(data, file.path(output_dir, paste0('seurat_obj_', basename(Xenium_dir), '.qs')))
   
   
+}
+
+
+
+
+
+
+PlotXeniumMetaprograms <- function(cellid_dir, SampleName_vector, SampleID_vector, SampleID_order,
+                                   order_metaprograms, colors_metaprogram, replicate = FALSE) {
+  
+  message(green('-------------------------------------------------------'))
+  message(blue('[1/4] Loading cellIDs '))
+  
+  metaprogram_frequency <- list()
+  
+  for (i in seq_along(SampleName_vector)) { 
+    # read data
+    cellID <- suppressWarnings(suppressMessages(read_csv(file.path(cellid_dir, paste0('cell_ID_', SampleName_vector[i], '.csv')))))
+    print(paste0("Reading ", SampleName_vector[i]))
+    
+    # transform in data table with frequency
+    metaprogram_frequency[[i]] <- cellID %>%
+      group_by(group) %>%
+      summarise(n = n()) %>%
+      mutate(freq = (n/sum(n)*100))
+  }
+  
+  names(metaprogram_frequency) <- SampleName_vector  
+  
+  message(green('-------------------------------------------------------'))
+  message(blue('[2/4] Creating df'))
+  
+  # bind rows together and transform into df
+  metaprogram_proportion <- bind_rows(metaprogram_frequency, .id = "Xenium_Region")
+  metaprogram_proportion <- as.data.frame(metaprogram_proportion)
+  
+  message(green('-------------------------------------------------------'))
+  message(blue('[3/4] Adding sample names and reordering'))
+  
+  # add sample name
+  matching_indices <- match(metaprogram_proportion$Xenium_Region, SampleName_vector)
+  metaprogram_proportion$SampleID <- SampleID_vector[matching_indices]
+  
+  # reorder so that it is the same as in the paper
+  metaprogram_proportion$group <- factor(metaprogram_proportion$group, 
+                                         levels = order_metaprograms)
+  
+  # reorder by SampleID
+  if (!is.null(SampleID_order)) {
+    metaprogram_proportion$SampleID <- factor(metaprogram_proportion$SampleID, levels = SampleID_order)
+    metaprogram_proportion <- metaprogram_proportion %>% arrange(SampleID)
+  } else {
+    metaprogram_proportion <- metaprogram_proportion %>% arrange(SampleID)
+  }
+  
+  
+  # Check if averaging by SampleID is required
+  if (replicate) {
+    metaprogram_proportion <- metaprogram_proportion %>%
+      group_by(group, SampleID) %>%
+      summarise(avg_frequency = mean(freq), .groups = 'drop')
+    
+    # Modify plot input to match averaged data
+    plot_data <- metaprogram_proportion
+    x_axis <- "SampleID"  # Update x-axis to reflect unique SampleIDs
+    y_var <- "avg_frequency"
+  } else {
+    plot_data <- metaprogram_proportion
+    x_axis <- "Xenium_Region"  # Default x-axis for individual replicates
+    y_var <- "freq"
+  }
+  
+  message(green('-------------------------------------------------------'))
+  message(blue('[4/4] Plotting'))
+  
+  # Plot a stacked bar plot
+  ggplot(plot_data, aes_string(x = x_axis, y = y_var, fill = "group")) +
+    scale_fill_manual(values = colors_metaprogram) +
+    geom_bar(stat = "identity", position = "fill", color = "black") +
+    labs(y = 'Proportion', x = '') + 
+    theme(panel.border = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_blank(),
+          panel.background = element_blank(),
+          axis.line = element_line(colour = "black"),
+          axis.text.x = element_text(size = 14, angle = 90, vjust = 0.5, hjust = 1, colour = "black"),
+          axis.text.y = element_text(size = 14, colour = "black"),
+          axis.title = element_text(size = 14),
+          legend.text = element_text(size = 14),
+          legend.title = element_blank())
 }

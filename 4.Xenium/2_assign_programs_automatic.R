@@ -59,10 +59,10 @@ marker_genes_list <- split(marker_genes$Gene, marker_genes$Annotation_Sara)
 
 
 # select cell types with priority from Xenium panel or single cell object -----------------
-labels_priority_panel <- c('Endothelial', 'Neurons', 'Oligodendrocytes', 'Astrocyte', 'T-cells', 'Myeloid')
+labels_priority_panel <- c('Endothelial', 'Neurons', 'Oligodendrocytes', 'T-cells', 'Myeloid')
 # all tumor objects
 labels_priority_scObject <- c("Neuroepithelial-like", "Radial-glia-like", 
-                              "Embryonic-neuronal-like", "Neuronal-like" ,"Ependymal-like", "MES-like", "Embryonic-like")
+                              "Neuronal-like" ,"Ependymal-like", "MES-like")
 
 malignant_cells <- c("Neuroepithelial-like", "Radial-glia-like", 
                      "Embryonic-neuronal-like", "Neuronal-like" ,"Ependymal-like", "MES-like", "Embryonic-like")

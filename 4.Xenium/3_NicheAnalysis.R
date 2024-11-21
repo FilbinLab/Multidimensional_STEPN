@@ -48,7 +48,7 @@ metadata <- metadata %>% filter(SampleName == SampleName_arg)
 Xenium_dir <- file.path(Xenium_seurat_obj_dir, metadata$SampleName)
 
 # Perform niche analysis --------------------------------------------
-NicheAnalysis(Xenium_dir, data_dir, niches_min = 4, niches_max = 6, n_neighbors = 20)
+NicheAnalysis(Xenium_seurat_obj_dir, data_dir, niches_min = 4, niches_max = 6, n_neighbors = 20)
   
 
 
