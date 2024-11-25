@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH -c 4                              # Request one core
+#SBATCH -c 8                              # Request one core
 #SBATCH -N 1                               # Request one node (if you request more than one core with -c, also using
-#SBATCH -t 0-02:00                         # Runtime in D-HH:MM format
+#SBATCH -t 0-04:00                         # Runtime in D-HH:MM format
 #SBATCH -p short                           # Partition to run in
-#SBATCH --mem=100G                          # Memory total in MB (for all cores)
+#SBATCH --mem=150G                          # Memory total in MB (for all cores)
 #SBATCH --job-name %j 		# Job name
 #SBATCH -o %j.out		# File to which standard out will be written
 #SBATCH -e %j.err 		# File to which standard err will be written

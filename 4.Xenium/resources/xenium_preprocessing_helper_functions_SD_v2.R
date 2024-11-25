@@ -8,6 +8,7 @@ library(ggpubr)
 library(crayon)
 library(parallel)
 library(readxl)
+library(cowplot)
 
 ## Function to preprocess the xenium sequencing (creates seurat object, find markers for different resolutions and score the signatures)
 ## @para: rawDir (sample sequencing raw dir)
@@ -18,32 +19,36 @@ library(readxl)
 
 RunFullXenium <- function(smp, rawDir, outDir) {
   
-
+  
   ## Preprocessing seurat objects
   message(green('-------------------------------------------------------'))
   message(blue(glue('Starting pre-processing for sample: {yellow$underline$bold(smp)}!!')))
-  message(blue('[1/3] Loading Xenium raw files...'))
+  message(blue('[1/5] Loading Xenium raw files...'))
   
   suppressWarnings(suppressMessages(xenium.obj <- LoadXenium(rawDir, fov = "fov")))
   xenium.obj <- subset(xenium.obj, subset = nCount_Xenium > 0)
   message(glue("{ncol(xenium.obj)} cells."))
   
-  message(blue('[2/3] Running SCTransform-based normalization...'))
+  message(blue('[2/5] Running SCTransform-based normalization...'))
   xenium.obj <- SCTransform(xenium.obj, assay = "Xenium", vars.to.regress = c('nFeature_Xenium', 'nCount_Xenium'), vst.flavor = "v2", verbose = FALSE)
   
-  message(blue('[3/3] Running PCA and UMAP reductions...'))
+  message(blue('[3/5] Running PCA and UMAP reductions...'))
   xenium.obj <- RunPCA(xenium.obj, npcs = 50, features = rownames(xenium.obj), verbose = FALSE)
   xenium.obj <- RunUMAP(xenium.obj, dims = 1:optimizePCA(xenium.obj, 0.8), verbose = FALSE)
   
-  # message(blue('[4/8] Clustering...'))
-  # xenium.obj <- FindNeighbors(xenium.obj, reduction = "pca", dims = 1:optimizePCA(xenium.obj, 0.8), verbose = FALSE)
-  # xenium.obj <- FindClusters(xenium.obj, resolution = seq(0.1, 1, 0.1), verbose = FALSE)
-  # xenium.obj <- changeClusterNumbers(xenium.obj)
-  qsave(xenium.obj, glue('{outDir}/seurat.qs'))
-  }
-  
+  message(blue('[4/5] Clustering...'))
+  xenium.obj <- FindNeighbors(xenium.obj, reduction = "pca", dims = 1:optimizePCA(xenium.obj, 0.8), verbose = FALSE)
+  xenium.obj <- FindClusters(xenium.obj, resolution = seq(0.1, 1, 0.1), verbose = FALSE)
 
+  xenium.obj <- changeClusterNumbers(xenium.obj)
   
+  message(blue('[5/5] Saving'))
+  
+  qsave(xenium.obj, glue('{outDir}/seurat.qs'))
+}
+
+
+
 
 
 scoreNmfGenes <- function(cm_center, cm_mean, nmf_gene_list, cores = 8, verbose = FALSE, simple = FALSE){
@@ -186,154 +191,211 @@ changeClusterNumbers <- function(seurat_obj){
 }
 
 
-  
+
 
 XeniumCellAssignment <- function(seurat_object_path, Xenium_dir, marker_genes_list, 
                                  labels_priority_panel, labels_priority_scObject,
                                  malignant_cells,
                                  colors) {
   
-    
-    ## 
-    message(green('-------------------------------------------------------'))
-    message(blue(paste0('[1/8] Loading Xenium seurat object ', basename(Xenium_dir))))
-    
-    data <- qread(file.path(Xenium_dir, '/seurat.qs'))
-    
-    
-    message(green('-------------------------------------------------------'))
-    message(blue(paste0('[2/8] Loading reference seurat object')))
-    
-    seurat_object <- qread(seurat_object_path)
-    
-    
-    message(green('-------------------------------------------------------'))
-    message(blue(paste0('[3/8] Transfer anchors from single cell data')))
-
-    Idents(seurat_object) <- 'cell_type'
-    anchors <- FindTransferAnchors(reference = seurat_object, query = data, normalization.method = "SCT", npcs = 20, reference.assay = "SCT", query.assay = "SCT")
-    
-    # transfer labels
-    predictions <- TransferData(
-      anchorset = anchors,
-      refdata = seurat_object$cell_type
-    )
-    data <- AddMetaData(object = data, metadata = predictions$predicted.id, col.name = 'predicted_label_snRNAseq')
-    data <- AddMetaData(object = data, metadata = predictions$prediction.score.max, col.name = 'predicted_label_snRNAseq_score')
-    
-    # If cell score < 0.5 --> unassigned
-    data$predicted_label_snRNAseq <- ifelse(data$predicted_label_snRNAseq_score < 0.5, 'Unknown', data$predicted_label_snRNAseq)
-    
-    
-    
-    message(green('-------------------------------------------------------'))
-    message(blue(paste0('[4/8] Add scores for Xenium panel marker genes')))
-    
-    DefaultAssay(data) <- 'SCT'
-    data <- AddModuleScore_UCell(data, features = marker_genes_list)
-    U_Cell_signatures <- paste0(names(marker_genes_list), '_UCell')
-    
-    # retrieve highest UCell score
-    UCell_scores <- data@meta.data[, U_Cell_signatures]
-    
-    # Assign cell identity based on highest value (if cell score < 0.5 --> unassigned)
-    UCell_scores$cell_type_UCell <- apply(UCell_scores, 1, function(row) {
-      max_score <- max(row)
-      if (max_score < 0.5) {
-        return("Unknown")
-      } else {
-        return(names(UCell_scores)[which.max(row)])
-      }
-    })
-    
-    # Remove "_UCell" from each element
-    UCell_scores$cell_type_UCell <- gsub("_UCell", "", UCell_scores$cell_type_UCell)
-    UCell_scores$cell_type_average <- UCell_scores$cell_type_UCell
-    
-    # group into broad categories
-    UCell_scores$cell_type_average <- gsub("Neurons .*", "Neurons", UCell_scores$cell_type_average)
-    UCell_scores$cell_type_average <- gsub("Microglia", "Myeloid", UCell_scores$cell_type_average)
-    UCell_scores$cell_type_average <- gsub("Dendritic cell", "Myeloid", UCell_scores$cell_type_average)
-    
-    data <- AddMetaData(object = data, metadata = UCell_scores$cell_type_average, col.name = 'predicted_label_UCell')
-    data <- AddMetaData(object = data, metadata = UCell_scores$cell_type_UCell, col.name = 'predicted_label_UCell_precise')
-    
-    
-    message(green('-------------------------------------------------------'))
-    message(blue(paste0('[5/8] Check for congruence')))
-    
-    # Create a summary of matches and mismatches for unique categories
-    label_comparison <- data@meta.data %>%
-      group_by(predicted_label_snRNAseq, predicted_label_UCell) %>%
-      summarise(
-        Matches = sum(predicted_label_snRNAseq == predicted_label_UCell),
-        Differences = sum(predicted_label_snRNAseq != predicted_label_UCell)
-      ) %>%
-      ungroup()
-    
-    # Display the results
-    print(label_comparison)
-    write_csv(label_comparison, file.path(data_dir, '1_comparison_labels.csv'))
-    
-    
-    message(green('-------------------------------------------------------'))
-    message(blue(paste0('[6/8] Assign labels')))
-    
-    data$cell_type <- ifelse(
-      data$predicted_label_UCell %in% labels_priority_panel, 
-      data$predicted_label_UCell,
+  
+  ## 
+  message(green('-------------------------------------------------------'))
+  message(blue(paste0('[1/8] Loading Xenium seurat object ', basename(Xenium_dir))))
+  
+  data <- qread(file.path(Xenium_dir, '/seurat.qs'))
+  
+  
+  message(green('-------------------------------------------------------'))
+  message(blue(paste0('[2/8] Loading reference seurat object')))
+  
+  seurat_object <- qread(seurat_object_path)
+  
+  
+  
+  message(green('-------------------------------------------------------'))
+  message(blue(paste0('[3/8] Transfer anchors from single cell data')))
+  
+  # same approach as in Seurat vignette
+  Idents(seurat_object) <- 'cell_type'
+  
+  anchors <- FindTransferAnchors(reference = seurat_object, query = data, 
+                                 normalization.method = "SCT", npcs = 50)
+  
+  # transfer labels
+  predictions <- TransferData(
+    anchorset = anchors,
+    refdata = seurat_object$cell_type,
+    #prediction.assay = TRUE,
+    weight.reduction = data[["pca"]], dims = 1:50
+  )
+  
+  
+  # add metadata labels
+  data <- AddMetaData(object = data, metadata = predictions$predicted.id, col.name = 'predicted_label_snRNAseq')
+  data <- AddMetaData(object = data, metadata = predictions$prediction.score.max, col.name = 'predicted_label_snRNAseq_score')
+  
+  # If cell score < 0.4 --> unassigned
+  print('Mean max prediction score is ')
+  mean <- mean(predictions$prediction.score.max)
+  mean
+  data$predicted_label_snRNAseq <- ifelse(data$predicted_label_snRNAseq_score < 0.4, 'Unknown', data$predicted_label_snRNAseq)
+  
+  
+  
+  message(green('-------------------------------------------------------'))
+  message(blue(paste0('[4/8] Add scores for Xenium panel marker genes')))
+  
+  DefaultAssay(data) <- 'SCT'
+  data <- AddModuleScore_UCell(data, features = marker_genes_list)
+  U_Cell_signatures <- paste0(names(marker_genes_list), '_UCell')
+  
+  # retrieve highest UCell score
+  UCell_scores <- data@meta.data[, U_Cell_signatures]
+  
+  # Assign cell identity based on highest value (if cell score < 0.6 --> unassigned)
+  UCell_scores$cell_type_UCell <- apply(UCell_scores, 1, function(row) {
+    max_score <- max(row)
+    if (max_score < 0.6) {
+      return("Unknown")
+    } else {
+      return(names(UCell_scores)[which.max(row)])
+    }
+  })
+  
+  
+  # Remove "_UCell" from each element
+  UCell_scores$cell_type_UCell <- gsub("_UCell", "", UCell_scores$cell_type_UCell)
+  UCell_scores$cell_type_average <- UCell_scores$cell_type_UCell
+  
+  # group into broad categories
+  UCell_scores$cell_type_average <- gsub("Neurons .*", "Neurons", UCell_scores$cell_type_average)
+  UCell_scores$cell_type_average <- gsub("Microglia", "Myeloid", UCell_scores$cell_type_average)
+  UCell_scores$cell_type_average <- gsub("Endothelial .*", "Endothelial", UCell_scores$cell_type_average)
+  UCell_scores$cell_type_average <- gsub("Dendritic cell", "Myeloid", UCell_scores$cell_type_average)
+  
+  # for EPN (astro are neuronal-like cells)
+  UCell_scores$cell_type_average <- gsub("Astrocyte", "Neuronal-like", UCell_scores$cell_type_average)
+  
+  
+  data <- AddMetaData(object = data, metadata = UCell_scores$cell_type_average, col.name = 'predicted_label_UCell')
+  data <- AddMetaData(object = data, metadata = UCell_scores$cell_type_UCell, col.name = 'predicted_label_UCell_precise')
+  
+  
+  
+  message(green('-------------------------------------------------------'))
+  message(blue(paste0('[5/8] Assign labels')))
+  
+  data$cell_type <- ifelse(
+    data$predicted_label_UCell %in% labels_priority_panel, 
+    data$predicted_label_UCell,
+    ifelse(
+      data$predicted_label_snRNAseq %in% labels_priority_scObject,
+      data$predicted_label_snRNAseq,
       ifelse(
-        data$predicted_label_snRNAseq %in% labels_priority_scObject,
-        data$predicted_label_snRNAseq,
-        ifelse(
-          data$predicted_label_snRNAseq == "Unknown" & data$predicted_label_UCell != "Unknown",
-          data$predicted_label_UCell,
-          ifelse(
-            data$predicted_label_UCell == "Unknown" & data$predicted_label_snRNAseq != "Unknown",
-            data$predicted_label_snRNAseq,
-            'Unknown' # Assign NA if no other condition matches
-          )
-        )
+        data$predicted_label_snRNAseq == "Unknown",
+        data$predicted_label_UCell, 
+        data$predicted_label_UCell
       )
     )
-    
-    
-    
-    # Display the final results
-    number_cells <- as.data.frame(table(data$cell_type))
-    write_csv(number_cells, file.path(data_dir, '2_number_cells_cell_type.csv'))
-    print(number_cells)
-    
-    
-    message(green('-------------------------------------------------------'))
-    message(blue(paste0('[7/8] Plot spatial maps')))
-    
-    p1 <- ImageDimPlot(data, group.by = 'predicted_label_UCell',  size = 0.5, border.size = NA,  dark.background = F, cols = colors)
-    p2 <- ImageDimPlot(data, group.by = 'predicted_label_snRNAseq', size = 0.5, border.size = NA,  dark.background = F, cols = colors)
-    p3 <- ImageDimPlot(data, group.by = 'cell_type', size = 0.5, border.size = NA,  dark.background = F, cols = colors) 
-    
-    plot_grid(p1, p2, p3, ncol = 3)
-    ggsave(file.path(plot_dir, paste0('1_SpatialMaps_', basename(Xenium_dir), '.pdf')), width = 15, height = 5)
-    
-    # Add information about malignant or non-malignant
-    data$malignant <- ifelse(data$cell_type %in% malignant_cells, "Malignant", "Non-malignant")  
+  )
+  
+  print('Classified cell numbers')
+  print(table(data$cell_type))
+  
+  
+  
+  
+  message(green('-------------------------------------------------------'))
+  message(blue(paste0('[6/8] Check for frequency of assigned cell type within each Seurat cluster')))
 
-    
-    message(green('-------------------------------------------------------'))
-    message(blue(paste0('[8/8] Save annotated object')))
+  # Create a contingency table ------------------------
 
-    qsave(data, file.path(data_dir, paste0('seurat_obj_', basename(Xenium_dir), '.qs')))
-    
-    
-    # export cell ID
-    cell_id <- data.frame(rownames(data@meta.data), data@meta.data$cell_type)
-    
-    # rename column names
-    colnames(cell_id)[colnames(cell_id) == "rownames.data.meta.data."] <- "cell_id"
-    colnames(cell_id)[colnames(cell_id) == "data.meta.data.cell_type"] <- "group"
-    # save
-    write_csv(cell_id, file.path(data_dir, paste0('cell_ID_', basename(Xenium_dir), ".csv")))
-    
+  # resolution chosen in metadata excel file
+  print('Chosen resolution of ')
+  print(metadata$Resolution)
+
+  contingency_table <- table(data$cell_type, data@meta.data[, metadata$Resolution])
+  print('Contingency table')
+  contingency_table
+  write_csv(as.data.frame(contingency_table), file.path(data_dir, '1_cell_type_per_cluster.csv'))
+
+  column_sums <- colSums(contingency_table)
+  percentage_table <- sweep(contingency_table, 2, column_sums, FUN = "/") * 100
+  rounded_percentage_table <- round(percentage_table, 2)
+
+  print('Contingency table in percentage')
+  print(rounded_percentage_table)
+  write_csv(as.data.frame(rounded_percentage_table), file.path(data_dir, '1_cell_type_per_cluster_percentage.csv'))
+
+
+  # # reclassify cells based on most likely cluster (only if it is composed of more than 70%)
+  # # get cell type with highest frequency for each cluster
+  # max_row_names <- apply(contingency_table, 2, function(col) {
+  #   rowname <- rownames(contingency_table)[which.max(col)]
+  #   return(rowname)
+  # })
+  # 
+  # print(max_row_names)
+  # 
+  # # Identify the cell types that dominate (>70%) in each cluster
+  # proportion_table <- sweep(contingency_table, 2, column_sums, FUN = "/")
+  # dominated_clusters <- apply(proportion_table, 2, function(col) {
+  #   max_prop <- max(col)
+  #   return(max_prop > 0.7)  # Check if any cell type has >70% proportion
+  # })
+  # 
+  # # reassign cells
+  # Idents(data) <- metadata$Resolution
+  # new.cluster.ids <- max_row_names
+  # names(new.cluster.ids) <- levels(data)
+  # data <- RenameIdents(data, new.cluster.ids)
+  # data[["cell_type_fin"]] <- Idents(object = data)
+  # data$cell_type_fin2 <- ifelse(data@meta.data[, metadata$Resolution] %in% dominated_clusters, data$cell_type_fin, data$cell_type)
+
+  
+  # Display the final results
+  number_cells <- as.data.frame(table(data$cell_type))
+  print(number_cells)
+  write_csv(number_cells, file.path(data_dir, '2_number_cells_cell_type.csv'))
+
+  
+  message(green('-------------------------------------------------------'))
+  message(blue(paste0('[7/8] Plot spatial maps')))
+  
+  p1 <- ImageDimPlot(data, group.by = 'predicted_label_UCell',  size = 0.5, border.size = NA,  dark.background = F, cols = colors)
+  p2 <- ImageDimPlot(data, group.by = 'predicted_label_snRNAseq', size = 0.5, border.size = NA,  dark.background = F, cols = colors)
+  p3 <- ImageDimPlot(data, group.by = 'cell_type', size = 0.5, border.size = NA,  dark.background = F, cols = colors) 
+  p4 <- ImageDimPlot(data, group.by = metadata$Resolution, size = 0.5, border.size = NA,  dark.background = F) 
+  
+  plot_grid(p1, p2, p3, p4, ncol = 2)
+  ggsave(file.path(plot_dir, paste0('1_SpatialMaps_', basename(Xenium_dir), '.pdf')), width = 10, height = 10)
+  
+  
+  # Plot dotplot ZFTA-RELA expression
+  DotPlot(data, assay = 'SCT', features = "ZFTA-RELA-Fusion1", group.by = 'cell_type')
+  ggsave(file.path(plot_dir, paste0('2_DotPlot_ZR_', basename(Xenium_dir), '.pdf')), width = 4, height = 5)
+  
+  
+  # Add information about malignant or non-malignant
+  data$malignant <- ifelse(data$cell_type %in% malignant_cells, "Malignant", "Non-malignant")  
+  
+  
+  message(green('-------------------------------------------------------'))
+  message(blue(paste0('[8/8] Save annotated object')))
+  
+  qsave(data, file.path(data_dir, paste0('seurat_obj_', basename(Xenium_dir), '.qs')))
+  
+  
+  # export cell ID
+  cell_id <- data.frame(rownames(data@meta.data), data@meta.data$cell_type)
+  
+  # rename column names
+  colnames(cell_id)[colnames(cell_id) == "rownames.data.meta.data."] <- "cell_id"
+  colnames(cell_id)[colnames(cell_id) == "data.meta.data.cell_type"] <- "group"
+  # save
+  write_csv(cell_id, file.path(data_dir, paste0('cell_ID_', basename(Xenium_dir), ".csv")))
+  
   
 }
 
@@ -344,7 +406,7 @@ NicheAnalysis <- function(input_dir, output_dir,
                           niches_min, niches_max,
                           n_neighbors) {
   
-
+  
   message(green('-------------------------------------------------------'))
   message(blue('[1/3] Loading Xenium seurat object with annotation'))
   
@@ -353,12 +415,12 @@ NicheAnalysis <- function(input_dir, output_dir,
   
   message(green('-------------------------------------------------------'))
   message(blue(paste0('[2/3] Performing niche analysis')))
-
+  
   for (i in seq(niches_min, niches_max, 1)){
-  print(glue('Calculating niche {i}')) 
-  data <- BuildNicheAssay(object = data, fov = "fov", group.by = "cell_type", niches.k = i, 
-                          neighbors.k = n_neighbors, cluster.name = glue('niche_{i}'))
-  print(glue('Finished calculating niche {i}')) 
+    print(glue('Calculating niche {i}')) 
+    data <- BuildNicheAssay(object = data, fov = "fov", group.by = "cell_type", niches.k = i, 
+                            neighbors.k = n_neighbors, cluster.name = glue('niche_{i}'))
+    print(glue('Finished calculating niche {i}')) 
   }
   
   
@@ -459,4 +521,616 @@ PlotXeniumMetaprograms <- function(cellid_dir, SampleName_vector, SampleID_vecto
           axis.title = element_text(size = 14),
           legend.text = element_text(size = 14),
           legend.title = element_blank())
+}
+
+
+
+
+
+PlotSpatialMapsZoom <- function(SampleName, input_dir, group_display, colors, size_dot, geom_rect = F,  x_min, x_max, y_min, y_max) {
+  
+  message(green('-------------------------------------------------------'))
+  message(blue('[1/4] Loading seurat object'))
+  
+  data <- qread(file.path(input_dir, paste0('seurat_obj_', SampleName, '.qs')))
+  
+  
+  message(green('-------------------------------------------------------'))
+  message(blue('[2/4] Plotting spatial map'))
+  
+  p1 <- ImageDimPlot(data, group.by = group_display,  fov = "fov", cols = colors,  border.size = NA, size = size_dot,
+                     dark.background = T, axes = TRUE) + 
+    geom_rect(xmin = x_min, xmax = x_max, ymin = y_min, ymax = y_max, color = 'black', fill = NA, lwd = 0.5) + seurat_theme()
+  
+  message(green('-------------------------------------------------------'))
+  message(blue('[3/4] Plotting zoomed map'))
+  
+  data[["zoom_1"]] <- Crop(data[["fov"]], x = c(x_min, x_max), y = c(y_min, y_max), coords = "plot")
+  DefaultBoundary(data[["zoom_1"]]) <- "segmentation"
+  p2 <- ImageDimPlot(data, fov = "zoom_1", size = 1, group.by = group_display, border.color = "white", border.size = 0.1, 
+                     cols = colors) + seurat_theme() + theme(legend.position = "none")
+  
+  message(green('-------------------------------------------------------'))
+  message(blue('[4/4] Plotting and saving both images'))
+  plot_grid(p1, p2, ncol = 2, rel_widths = c(1, 0.7))
+  
+}
+
+
+
+
+
+
+# spatial coherence
+prepareData <- function(cell_feature_matrix, cells_info, scale = 1, filter_genes = 10, filter_cells = 10) {
+  spatial <- cells_info %>% dplyr::select(c("cell_id", "x_centroid", "y_centroid")) %>%
+    column_to_rownames("cell_id") %>%
+    rename_all(~c("imagecol", "imagerow"))
+  
+  spatial[["imagecol"]] = spatial[["imagecol"]] * scale
+  spatial[["imagerow"]] = spatial[["imagerow"]] * scale
+  
+  cell_feature_matrix <- cell_feature_matrix[rowSums(cell_feature_matrix) >= filter_genes, ]
+  
+  cell_feature_matrix <- cell_feature_matrix[, colSums(cell_feature_matrix) >= filter_cells]
+  
+  spatial <- spatial[colnames(cell_feature_matrix), ]
+  
+  return(list(spatial = spatial, cell_feature_matrix = cell_feature_matrix))
+}
+
+
+norm_data <- function(cell_feature_matrix) {
+  counts_per_cell <- rowSums(cell_feature_matrix)
+  counts_greater_than_zero <- counts_per_cell[counts_per_cell > 0]
+  after <- median(counts_greater_than_zero)
+  counts_per_cell <- counts_per_cell / after
+  mat <- cell_feature_matrix/counts_per_cell
+  return(mat)
+}
+
+
+grid_spatial <- function(norm_data, spatial, variable, nbins) {
+  #grid_spatial <- function(norm_data, spatial, variable, nbins = 200) {
+  
+  message(glue('{nbins} by {nbins} has this many spots: {nbins*nbins}'))
+  
+  n_squares = nbins * nbins
+  cell_bcs = colnames(norm_data)
+  xs <- as.integer(unname(spatial$imagecol))
+  ys <- as.integer(unname(spatial$imagerow))
+  
+  h2 <- hist2d(xs, ys, nbins = nbins, show = F)
+  grid_counts <- h2$counts
+  xedges <- h2$x.breaks
+  yedges <- h2$y.breaks
+  
+  grid_expr <- matrix(data = 0, nrow = n_squares, ncol = nrow(norm_data))
+  grid_coords <- matrix(data = 0, nrow = n_squares, ncol = 2)
+  grid_cell_counts <- rep(0, n_squares)
+  
+  cell_labels <- as.character(variable)
+  cell_set = sort(unique(cell_labels))
+  cell_info <- matrix(data = 0, nrow = n_squares, ncol = length(cell_set))
+  
+  pb <- txtProgressBar(min = 0, max = nbins, style = 3, width = 50, char = "=")
+  for (i in 1:nbins) {
+    x_left <- xedges[i]
+    x_right <- xedges[i + 1]
+    for (j in 1:nbins) {
+      n <- ((i-1) * nbins) + j
+      
+      y_down <- yedges[j]
+      y_up <- yedges[j + 1]
+      
+      grid_coords[n, 1] = (x_right + x_left) / 2
+      grid_coords[n, 2] = (y_up + y_down) / 2
+      
+      
+      # Now determining the cells within the gridded area #
+      #if ((i != nbins-1) & (j == nbins-1)) { # top left corner
+      if ((i != nbins-1) & (j == nbins)) { # top left corner
+        x_true = (xs >= x_left) & (xs < x_right)
+        y_true = (ys <= y_up) & (ys > y_down)
+        #} else if ((i == nbins - 1) & (j != nbins)) { # bottom right corner
+      } else if ((i == nbins - 1) & (j != nbins-1)) { # bottom right corner
+        x_true = (xs > x_left) & (xs <= x_right)
+        y_true = (ys < y_up) & (ys >= y_down)
+      } else {   # average case
+        x_true = (xs >= x_left) & (xs < x_right)
+        y_true = (ys < y_up) & (ys >= y_down)
+      }
+      
+      cell_bool = x_true & y_true
+      grid_cells = cell_bcs[cell_bool]
+      
+      grid_cell_counts[n] = length(grid_cells)
+      
+      # Summing the expression across these cells to get the grid expression #
+      if (length(grid_cells) > 0) {
+        if (length(grid_cells) != 1) {
+          grid_expr[n,] = rowSums(norm_data[, cell_bool])
+        } else {
+          grid_expr[n,] = norm_data[, cell_bool]
+        }
+        
+      }
+      
+      # If we have cell type information, will record #
+      if (length(grid_cells) > 0) {
+        grid_cell_types <- cell_labels[cell_bool]
+        
+        tmp <- c()
+        for (ct in cell_set) {
+          tmp <- c(tmp, length(which(grid_cell_types == ct)) / length(grid_cell_types))
+        }
+        cell_info[n, ] <- tmp
+      }
+      
+    }
+    setTxtProgressBar(pb, i)
+  }
+  close(pb)
+  
+  
+  grid_expr <- grid_expr %>% as.data.frame()
+  rownames(grid_expr) <- glue('grid_{1:n_squares}')
+  colnames(grid_expr) <- rownames(norm_data)
+  
+  grid_data <- list(expr = grid_expr,
+                    image_col = grid_coords[,1],
+                    image_row = grid_coords[,2],
+                    n_cells = grid_cell_counts,
+                    grid_coords = grid_coords)
+  
+  cell_info <- cell_info %>% as.data.frame()
+  rownames(cell_info) <- rownames(grid_expr)
+  colnames(cell_info) <- cell_set
+  
+  max_indices <- apply(cell_info, 1, function(x) names(which.max(x)))
+  max_indices <- max_indices[grid_data$n_cells > 0]
+  max_indices <- as.character(max_indices)
+  
+  grid_data$expr <- grid_data$expr[grid_data$n_cells > 0, ]
+  grid_data$image_col <- grid_data$image_col[grid_data$n_cells > 0]
+  grid_data$image_row <- grid_data$image_row[grid_data$n_cells > 0]
+  
+  dt <- data.frame(x = grid_data$image_col, y = grid_data$image_row, Metaprogram = max_indices)
+  
+  return(dt)
+}
+
+
+coherence_score <- function(grid_df, variable) {
+  mat <- grid_df %>% mutate(x = as.character(x)) %>% mutate(y = as.character(y))
+  mat <- reshape2::acast(mat, y~x, value.var = variable) %>% as.data.frame()
+  rownames(mat) <- 1:nrow(mat)
+  colnames(mat) <- 1:ncol(mat)
+  
+  programs <- unique(grid_df[[variable]])
+  results <- list()
+  for (program in programs) {
+    tmp <- matrix(0, nrow = nrow(mat), ncol = ncol(mat), dimnames = list(rownames(mat), colnames(mat)))
+    for (i in 1:nrow(mat)) {
+      for (j in 1:ncol(mat)) {
+        
+        if (!is.na(mat[i,j])) {
+          
+          if (mat[i,j] == program) {
+            
+            if (length(mat[i,j+1]) != 0) { ## right
+              if (!is.na(mat[i,j+1])) {
+                if (mat[i,j+1] == program) {
+                  tmp[i,j+1] <- tmp[i,j+1] + 1
+                }
+              }
+            }
+            
+            if (length(mat[i,j-1]) != 0) { ## left
+              if (!is.na(mat[i,j-1])) {
+                if (mat[i,j-1] == program) {
+                  tmp[i,j-1] <- tmp[i,j-1] + 1
+                }
+              }
+            }
+            
+            if (length(mat[i-1,j]) != 0) { ## top
+              if (!is.na(mat[i-1,j])) {
+                if (mat[i-1,j] == program) {
+                  tmp[i-1,j] <- tmp[i-1,j] + 1
+                }
+              }
+            }
+            
+            if (length(mat[i+1,j]) != 0) { ## bottom
+              if (!is.na(mat[i+1,j])) {
+                if (mat[i+1,j] == program) {
+                  tmp[i+1,j] <- tmp[i+1,j] + 1
+                }
+              }
+            }
+            
+            if (length(mat[i-1,j+1]) != 0) { ## top righ diagonal
+              if (!is.na(mat[i-1,j+1])) {
+                if (mat[i-1,j+1] == program) {
+                  tmp[i-1,j+1] <- tmp[i-1,j+1] + 1
+                }
+              }
+            }
+            
+            if (length(mat[i+1,j+1]) != 0) { ## bottom righ diagonal
+              if (!is.na(mat[i+1,j+1])) {
+                if (mat[i+1,j+1] == program) {
+                  tmp[i+1,j+1] <- tmp[i+1,j+1] + 1
+                }
+              }
+            }
+            
+            if (length(mat[i-1,j-1]) != 0) { ## top left diagonal
+              if (!is.na(mat[i-1,j-1])) {
+                if (mat[i-1,j-1] == program) {
+                  tmp[i-1,j-1] <- tmp[i-1,j-1] + 1
+                }
+              }
+            }
+            
+            if (length(mat[i+1,j-1]) != 0) { ## bottom left diagonal
+              if (!is.na(mat[i+1,j-1])) {
+                if (mat[i+1,j-1] == program) {
+                  tmp[i+1,j-1] <- tmp[i+1,j-1] + 1
+                }
+              }
+            }
+            
+          } else { next }
+        }
+      }
+      #message(i)
+    }
+    results[[program]] <- tmp
+    #message(glue('{program} Done!'))
+  }
+  
+  suppressWarnings(counts <- grid_df %>% count_(variable))
+  
+  tmp <- data.frame()
+  for (metaprogram in counts[[variable]]) {
+    if (sum(results[[metaprogram]]) == 0) {
+      tmp <- rbind(tmp, data.frame(metaprogram = metaprogram, average = 0))
+    } else {
+      tmp <- rbind(tmp, data.frame(metaprogram = metaprogram, average = (sum(results[[metaprogram]]))/counts$n[counts[[variable]] == metaprogram]))
+    }
+  }
+  
+  return(list(coherence_score = mean(tmp$average), coherence_score_program = tmp, results_df = results))
+}
+
+
+
+gridding_coherence_density <- function(gridding, plot_dir, color_coherence_density, colors_metaprograms_Xenium) {
+  p1 <- ggplot(gridding, aes(x = y, y = x, color = Metaprogram)) +
+  geom_point(size = 0.2) +
+  scale_color_manual(values = colors_metaprograms_Xenium) +
+  theme_void() +
+  guides(colour = guide_legend(override.aes = list(size = 4)))
+  p1
+  ggsave(file.path(plot_dir, paste0('1_Gridding_', SampleName_arg, '.pdf')), width = 9, height = 8)
+  
+  
+  mat <- gridding %>% mutate(x = as.character(x)) %>% mutate(y = as.character(y))
+  mat <- reshape2::acast(mat, y~x, value.var = 'Metaprogram') %>% as.data.frame()
+  
+  # Sum coherence score across all MPs for each position (regions with high coherence will score high)
+  summed_matrix <- Reduce(`+`, coherence$results_df)
+  
+  #change x/y values with actual positions
+  rownames(summed_matrix) <- rownames(mat) 
+  colnames(summed_matrix) <- colnames(mat) 
+  
+  summed_matrix <- reshape2::melt(summed_matrix)
+  
+  df <- summed_matrix #
+  colnames(df) <- c("x", "y", "value")  # Rename columns
+  
+  # Convert x and y to numeric if necessary
+  df$x <- as.numeric(as.character(df$x))
+  df$y <- as.numeric(as.character(df$y))
+  df$value <- as.numeric(as.character(df$value))
+  
+  
+  
+  
+  # Plot density of spatial cohernece score
+  p2 <- ggplot(df, aes(x = x, y = y, color = factor(value))) +
+    geom_point(size = 0.2) +
+    scale_color_manual(values = color_coherence_density) +
+    theme_void() +
+    guides(colour = guide_legend(override.aes = list(size = 4)))
+  p2
+  ggsave(file.path(plot_dir, paste0('2_Gridding_density_coherence_score_', SampleName_arg, '.pdf')), width = 9, height = 8)
+  
+  # plot combined
+  plot_grid(p1, p2, ncol = 2)
+  ggsave(file.path(plot_dir, paste0('3_Gridding_results_', SampleName_arg, '.pdf')), width = 18, height = 8)
+
+}
+
+
+
+
+
+
+plot_coherence_score <- function(FileName, cellid_dir, coherence_dir, plot_dir, 
+                                 colors_metaprograms_Xenium, col_sampling) {
+  # read  proportion of each cell type in each tumor ----------------------
+  
+  message(green('-------------------------------------------------------'))
+  message(blue('[1/4] Reading metaprogram proportions'))
+  
+  metaprogram_frequency <- list()
+  
+  for (i in seq_along(FileName)) { 
+    # read data
+    cellID <- suppressWarnings(suppressMessages(read_csv(file.path(cellid_dir, paste0('cell_ID_', FileName[i], '.csv')))))
+    print(paste0("Reading ", FileName[i]))
+    
+    # transform in data table with frequency
+    metaprogram_frequency[[i]] <- cellID %>%
+      group_by(group) %>%
+      summarise(n = n()) %>%
+      mutate(freq = (n/sum(n)*100))
+  }
+  
+  names(metaprogram_frequency) <- FileName  
+  
+  
+  # bind rows together and transform into df
+  metaprogram_proportion <- bind_rows(metaprogram_frequency, .id = "Xenium_Region")
+  metaprogram_proportion <- as.data.frame(metaprogram_proportion)
+  
+  
+  # reorganize dataframe with metaprogram proportion
+  metaprogram_proportion <- metaprogram_proportion[ , c("Xenium_Region", "group", "freq")]
+  
+  proportion2 <- metaprogram_proportion %>% 
+    complete(nesting(Xenium_Region, group), fill = list(freq = 0))  
+  
+  proportion3 <- cast(proportion2, Xenium_Region~group, mean)
+  
+  # export dataframe
+  write_csv(as.data.frame(proportion3), file.path(coherence_dir, '3_Program_frequency.csv'))
+  
+  
+  message(green('-------------------------------------------------------'))
+  message(blue('[2/4] Read spatial coherence score'))
+  
+  spatial_coherence <- list()
+  average_spatial_coherence_df <- NULL
+  average_spatial_coherence_program <- list()
+  
+  for (i in seq_along(FileName)) { 
+    spatial_coherence[[i]] <- qread(file.path(coherence_dir, paste0('results_', FileName[i], '.qs')))
+    print(paste0("Reading spatial coherence score ", FileName[i]))
+    
+    average_spatial_coherence_df[i] <-spatial_coherence[[i]]$coherence_score
+    average_spatial_coherence_program[[i]] <- spatial_coherence[[i]]$coherence_score_program
+    print(paste0("Extracting global spatial coherence score ", FileName[i]))
+  }
+  
+  names(spatial_coherence) <- names(average_spatial_coherence_df) <- names(average_spatial_coherence_program) <- FileName  
+  
+  
+  message(green('-------------------------------------------------------'))
+  message(blue('[3/4] Reorganize average spatial coherence per sample'))
+  
+  
+  
+  # reorganize and export average_spatial_coherence_df ------------------------------------------
+  average_spatial_coherence_df <- as.data.frame(average_spatial_coherence_df)
+  colnames(average_spatial_coherence_df)[1] <- 'average_spatial_coherence'
+  
+  # calculate scaled score
+  min <- min(average_spatial_coherence_df$average_spatial_coherence)
+  max <- max(average_spatial_coherence_df$average_spatial_coherence)
+  range <- max - min
+  average_spatial_coherence_df$scaled_spatial_coherence <- (average_spatial_coherence_df$average_spatial_coherence - min)/range
+  
+  # calculate average score per sample
+  average_spatial_coherence_df$SampleName <- FileName
+  average_spatial_coherence_df$SampleID <- metadata$SampleID
+  average_spatial_coherence_df$Source <- metadata$Source
+  
+  average_spatial_coherence_average <- average_spatial_coherence_df %>% 
+    dplyr::group_by(Source, SampleID) %>%
+    dplyr::summarise(mean = mean(scaled_spatial_coherence))
+  
+  # re-scale
+  min <- min(average_spatial_coherence_average$mean)
+  max <- max(average_spatial_coherence_average$mean)
+  range <- max - min
+  average_spatial_coherence_average$scaled_spatial_coherence <- (average_spatial_coherence_average$mean - min)/range
+  
+
+  # export dataframe
+  print('Saving spatial coherence score per sample')
+  write_csv(as.data.frame(average_spatial_coherence_df), file.path(coherence_dir, '1_Spatial_coherence_score_by_sample.csv'))
+
+  # export dataframe
+  write_csv(as.data.frame(average_spatial_coherence_average), file.path(coherence_dir, '2_Spatial_coherence_score_average_by_sample.csv'))
+  
+
+  
+  
+  
+  
+  message(green('-------------------------------------------------------'))
+  message(blue('[4/4] Reorganize average spatial coherence per program'))
+  
+  
+  
+  # reorganize and export average_spatial_coherence_program (per program) ------------------------------------------
+  average_spatial_coherence_program
+  
+  # add column with sample name
+  for (i in seq_along(average_spatial_coherence_program)) {
+    average_spatial_coherence_program[[i]]$SampleName <- names(average_spatial_coherence_program)[i]
+  }
+  
+  # merge information
+  average_spatial_coherence_program_df <- average_spatial_coherence_program[[1]]
+  
+  for (i in 2:length(average_spatial_coherence_program)) {
+    average_spatial_coherence_program_df <- rbind(average_spatial_coherence_program_df, average_spatial_coherence_program[[i]])
+  }
+  
+  # remove unassigend cells 
+  average_spatial_coherence_program_df <- average_spatial_coherence_program_df[average_spatial_coherence_program_df$metaprogram != "Unknown", ] 
+  
+  # calculate scaled score
+  min <- min(average_spatial_coherence_program_df$average)
+  max <- max(average_spatial_coherence_program_df$average)
+  range <- max - min
+  average_spatial_coherence_program_df$scaled_spatial_coherence <- (average_spatial_coherence_program_df$average - min)/range
+  
+  # add information on sample ID
+  matching_indices <- match(average_spatial_coherence_program_df$SampleName, metadata$SampleName)
+  average_spatial_coherence_program_df$SampleID <- metadata$SampleID[matching_indices]
+  average_spatial_coherence_program_df$Source <- metadata$Source[matching_indices]
+  
+  
+  
+  # export dataframe
+  write_csv(as.data.frame(average_spatial_coherence_program_df), file.path(coherence_dir, '4_Spatial_coherence_score_averge_by_MP.csv'))
+  
+  
+  
+  
+  
+  message(green('-------------------------------------------------------'))
+  message(blue('[5/5] Plot scores'))
+  
+  
+  # reorder
+  average_spatial_coherence_program_df$metaprogram <- factor(average_spatial_coherence_program_df$metaprogram, 
+                                                             levels = order_metaprograms)
+  
+  # Plot scores by metaprogram   
+  ggplot(average_spatial_coherence_program_df, aes(x = reorder(metaprogram, scaled_spatial_coherence), y = scaled_spatial_coherence)) +
+    geom_boxplot(fatten = NULL, outlier.shape = NA, width = 0.5, color = 'black') +
+    geom_point(aes(group = SampleName, fill = metaprogram,  color = metaprogram), size = 2, shape = 21, stroke = 0, position = position_dodge(0.2)) +
+    stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..),
+                 width = 0.4, size = 1, linetype = "solid") + 
+    scale_fill_manual(values = colors_metaprograms_Xenium) +
+    scale_color_manual(values = colors_metaprograms_Xenium) +
+    labs(x = "Metaprogram", y = "Spatial coherence score") +
+    theme_minimal() + theme(panel.border = element_blank(),
+                            panel.grid.major = element_blank(),
+                            panel.grid.minor = element_blank(),
+                            plot.background = element_blank(),
+                            panel.background = element_blank(),
+                            axis.line = element_line(colour = "black"),
+                            axis.text.x = element_text(size=12, angle = 90, vjust = 0.5, hjust=1, colour="black"),
+                            axis.text.y = element_text(size=12, colour="black"),
+                            axis.title=element_text(size=12),
+                            plot.title = element_text(size=10, face="bold")) 
+  ggsave(file.path(plot_dir, "1_coherence_by_MP.pdf"), width=6, height=4)
+  
+  
+  
+  
+  # Plot scores by sample   
+  ggplot(average_spatial_coherence_df, aes(x = reorder(SampleID, scaled_spatial_coherence), y = scaled_spatial_coherence)) +
+    geom_boxplot(fatten = NULL, outlier.shape = NA, width = 0.5, color = 'black') +
+    geom_point(aes(group = SampleName, fill = Source, color = Source), size = 4, shape = 21, stroke = 0, position = position_dodge(0.2)) +
+    stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..),
+                 width = 0.4, size = 1, linetype = "solid") + 
+    scale_color_manual(values = col_sampling) +
+    scale_fill_manual(values = col_sampling) +
+    labs(x = "Sample", y = "Spatial coherence score") +
+    theme_minimal() + theme(panel.border = element_blank(),
+                            panel.grid.major = element_blank(),
+                            panel.grid.minor = element_blank(),
+                            plot.background = element_blank(),
+                            panel.background = element_blank(),
+                            axis.line = element_line(colour = "black"),
+                            axis.text.x = element_text(size=12, angle = 90, vjust = 0.5, hjust=1, colour="black"),
+                            axis.text.y = element_text(size=12, colour="black"),
+                            axis.title=element_text(size=12),
+                            plot.title = element_text(size=10, face="bold")) 
+  ggsave(file.path(plot_dir, "2_coherence_by_sample_color_source.pdf"), width=6, height=4)
+  
+  
+  # Plot scores by sample   
+  ggplot(average_spatial_coherence_df, aes(x = reorder(SampleID, scaled_spatial_coherence), y = scaled_spatial_coherence)) +
+    geom_boxplot(fatten = NULL, outlier.shape = NA, width = 0.5, color = 'black') +
+    geom_point(aes(group = SampleName, fill = SampleID, color = SampleID), size = 4, shape = 21, stroke = 0, position = position_dodge(0.2)) +
+    stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..),
+                 width = 0.4, size = 1, linetype = "solid") + 
+    #scale_color_manual(values = col_sampling) +
+    #scale_fill_manual(values = col_sampling) +
+    labs(x = "Sample", y = "Spatial coherence score") +
+    theme_minimal() + theme(panel.border = element_blank(),
+                            panel.grid.major = element_blank(),
+                            panel.grid.minor = element_blank(),
+                            plot.background = element_blank(),
+                            panel.background = element_blank(),
+                            axis.line = element_line(colour = "black"),
+                            axis.text.x = element_text(size=12, angle = 90, vjust = 0.5, hjust=1, colour="black"),
+                            axis.text.y = element_text(size=12, colour="black"),
+                            axis.title=element_text(size=12),
+                            plot.title = element_text(size=10, face="bold")) 
+  ggsave(file.path(plot_dir, "2b_coherence_by_sample.pdf"), width=6, height=4)
+  
+  
+  # Plot scores by source   
+  average_spatial_coherence3 <- average_spatial_coherence_df %>% 
+    dplyr::group_by( Source, SampleID) %>%
+    dplyr::summarise(mean = mean(scaled_spatial_coherence),
+                     sem = sd(scaled_spatial_coherence) / sqrt(n()))
+  
+  
+  ggplot(average_spatial_coherence3, aes(x = reorder(Source, mean), y = mean)) +
+    #geom_violin(width = 1, color = 'black') + 
+    geom_boxplot(fatten = NULL, outlier.shape = NA, width = 0.5, color = 'black') +
+    geom_point(aes(group = SampleID, fill = Source, color = Source), size = 4, shape = 21, stroke = 0, position = position_dodge(0.2)) +
+    stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..),
+                 width = 0.4, size = 1, linetype = "solid") + 
+    scale_fill_manual(values = col_sampling) +
+    scale_color_manual(values = col_sampling) +
+    labs(x = "Metaprogram", y = "Spatial coherence score") +
+    theme_minimal() + theme(panel.border = element_blank(),
+                            panel.grid.major = element_blank(),
+                            panel.grid.minor = element_blank(),
+                            plot.background = element_blank(),
+                            panel.background = element_blank(),
+                            axis.line = element_line(colour = "black"),
+                            axis.text.x = element_text(size=12, angle = 90, vjust = 0.5, hjust=1, colour="black"),
+                            axis.text.y = element_text(size=12, colour="black"),
+                            axis.title=element_text(size=12),
+                            plot.title = element_text(size=10, face="bold")) +
+    ggpubr::stat_compare_means(method = "t.test", size = 4)
+  ggsave(file.path(plot_dir, "3_coherence_by_source_average_technical.pdf"), width=4, height=5)
+  
+  
+  ggplot(average_spatial_coherence_df, aes(x = reorder(Source, scaled_spatial_coherence), y = scaled_spatial_coherence)) +
+    geom_boxplot(fatten = NULL, outlier.shape = NA, width = 0.5, color = 'black') +
+    geom_point(aes(group = SampleID, fill = Source, color = Source), size = 4, shape = 21, stroke = 0, position = position_dodge(0.2)) +
+    stat_summary(fun.y = mean, geom = "errorbar", aes(ymax = ..y.., ymin = ..y..),
+                 width = 0.4, size = 1, linetype = "solid") + 
+    scale_fill_manual(values = col_sampling) +
+    scale_color_manual(values = col_sampling) +
+    labs(x = "Metaprogram", y = "Spatial coherence score") +
+    theme_minimal() + theme(panel.border = element_blank(),
+                            panel.grid.major = element_blank(),
+                            panel.grid.minor = element_blank(),
+                            plot.background = element_blank(),
+                            panel.background = element_blank(),
+                            axis.line = element_line(colour = "black"),
+                            axis.text.x = element_text(size=12, angle = 90, vjust = 0.5, hjust=1, colour="black"),
+                            axis.text.y = element_text(size=12, colour="black"),
+                            axis.title=element_text(size=12),
+                            plot.title = element_text(size=10, face="bold")) +
+    ggpubr::stat_compare_means(method = "t.test", size = 4)
+  ggsave(file.path(plot_dir, "3b_coherence_by_source.pdf"), width=4, height=5)
+
 }

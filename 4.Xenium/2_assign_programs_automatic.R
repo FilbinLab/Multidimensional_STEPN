@@ -1,8 +1,3 @@
-args <- commandArgs(trailingOnly = TRUE)
-print(args)
-
-SampleName_arg <- args[1]
-
 # Load packages -----------------------------------
 library(Seurat)
 library(ggplot2)
@@ -57,15 +52,21 @@ marker_genes <- marker_genes[, c('Gene', 'Annotation_Sara')]
 marker_genes_list <- split(marker_genes$Gene, marker_genes$Annotation_Sara)
 
 
+# select cell types with priority ---------------
 
-# select cell types with priority from Xenium panel or single cell object -----------------
-labels_priority_panel <- c('Endothelial', 'Neurons', 'Oligodendrocytes', 'T-cells', 'Myeloid')
-# all tumor objects
-labels_priority_scObject <- c("Neuroepithelial-like", "Radial-glia-like", 
-                              "Neuronal-like" ,"Ependymal-like", "MES-like")
+# select cell types with priority from Xenium panel 
+labels_priority_panel <- c('Endothelial', 'Astrocytes', 'Neurons', 'Oligodendrocytes', 'T-cells', 'Myeloid')
+
+# select cell types with priority from single cell object (all tumor cells 
+# except for embryonic-like (they all had low ZFTA-RELA expression and neuron markers, 
+# most likely normal cells)
+labels_priority_scObject <-c( "Neuronal-like" , "Radial-glia-like", "MES-like", "Ependymal-like",
+                             'Oligodendrocytes', 'T-cells', 'Myeloid', 'Endothelial')
 
 malignant_cells <- c("Neuroepithelial-like", "Radial-glia-like", 
                      "Embryonic-neuronal-like", "Neuronal-like" ,"Ependymal-like", "MES-like", "Embryonic-like")
+
+
 
 colors <- colors_metaprograms_Xenium
 

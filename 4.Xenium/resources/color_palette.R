@@ -11,3 +11,12 @@ names(colors_metaprograms_Xenium) <- c("Cycling", "Neuroepithelial-like", "Radia
 
 
 colors_niches <- paletteer::paletteer_d("colRoz::c_decresii")
+
+col_sampling <- c('Primary' = '#f7c297', 'Recurrence' = '#ffecb8', 'NA' = 'grey90')
+
+# create vector for color density
+color_coherence_density <- c(
+  "white", '#FFFFD9FF', "#E0F3DBFF", "#CCEBC5FF", "#A8DDB5FF", 
+  "#7BCCC4FF", "#4EB3D3FF", "#2B8CBEFF", "#0868ACFF", "#084081FF"
+)
+names(color_coherence_density) <- 0:8
