@@ -66,6 +66,27 @@ while IFS=, read -r SampleName SampleID; do
 done < /n/scratch/users/s/sad167/EPN/Xenium/scripts_revisions/SampleIdentifier.csv
 ```
 
-
 ## 5. Plot
+Script `4_coherence.R` calculates spatial coherence score for each sample
+
+To run all samples in parallel, use:
+
+```
+#!/bin/bash
+
+# Loop through each line in the input file
+while IFS=, read -r SampleName SampleID; do
+  # Remove leading and trailing whitespace (including carriage return characters)
+  SampleName=$(echo "$SampleName" | tr -d '\r')
+
+  # Execute your shell script with the sanitized FolderName
+  sh /n/scratch/users/s/sad167/EPN/Xenium/scripts_revisions/4c_coherence.sh $SampleName
+done < /n/scratch/users/s/sad167/EPN/Xenium/scripts_revisions/SampleIdentifier.csv
+```
+
+To plot results, use script in the folder `plots/Plot_coherence_score.R`
+
+
+## 6. Plot
 All scripts to plot final results can be found in the `plot` folder.
+
