@@ -10,9 +10,28 @@ names(colors_metaprograms_Xenium) <- c("Cycling", "Neuroepithelial-like", "Radia
                                        "T-cells", "Myeloid",  "Endothelial",  "Oligodendrocytes", 'Astrocyte', 'Neurons')
 
 
-colors_niches <- paletteer::paletteer_d("colRoz::c_decresii")
+colors_niches <- as.vector(paletteer::paletteer_d("colRoz::c_decresii"))
+names(colors_niches) <- c('1', '2', '3', '4', '5', '6')
 
 col_sampling <- c('Primary' = '#f7c297', 'Recurrence' = '#ffecb8', 'NA' = 'grey90')
+
+col_patientID <-  c('#370617',
+                    '#e01e37',
+                    '#f6cacc',
+                    '#ffba08',
+                    '#ffa200',
+                    '#d4d700',
+                    '#55a630',
+                    '#8be8d7',
+                    '#2fb5c7',
+                    '#0377a8',
+                    '#002855',
+                    '#a564d3',
+                    '#ff5ca5',
+                    '#ffb9d8',
+                    '#bc1f66',
+                    '#dcb9a1')
+
 
 # create vector for color density
 color_coherence_density <- c(

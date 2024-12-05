@@ -16,8 +16,8 @@ base_dir <- file.path('/n/scratch/users/s/sad167/EPN/Xenium')
 
 resource_dir  <- file.path(base_dir, 'scripts_revisions/resources')
 source(file.path(resource_dir, 'Plotting_functions.R'))
-source(file.path(resource_dir, 'color_palette.R'))
 source(file.path(resource_dir, 'xenium_preprocessing_helper_functions_SD_v2.R'))
+source(file.path(resource_dir, 'color_palette.R'))
 
 
 plot_dir  <- file.path(base_dir, 'analysis/5_plots')
@@ -26,8 +26,12 @@ if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
 input_dir <- file.path(base_dir, 'analysis/4_niche/data')
 cellid_dir <- file.path(base_dir, 'analysis/3_program_annotation/data')
 
+seurat_object_path <- list.files(file.path(base_dir, 'analysis/1_preparation/data'), pattern = "\\.qs$", full.names = TRUE)
+
 metadata <- read_xlsx(file.path(base_dir, 'scripts_revisions/SampleIdentifier.xlsx'))
 
+# remove these two samples because of low QC data
+metadata <- metadata %>% filter(!SampleName %in% c('STEPN14_Region_1', 'STEPN14_Region_2'))
 # reorder by sampleID
 metadata <- metadata %>% arrange(SampleName)
 
@@ -123,8 +127,8 @@ order_metaprograms <- c("Cycling",  "Embryonic-like", "Neuroepithelial-like", "R
                         "Neuronal-like" ,"Ependymal-like", "MES-like", 
                         "T-cells", "Myeloid",  "Endothelial",  "Oligodendrocytes", 'Astrocyte', 'Neurons', 'Unknown')
 
-SampleID_order <- c('STEPN-14','STEPN-10','STEPN-16','STEPN-06','STEPN-12','STEPN-15',
-                    'STEPN-18','STEPN-17','STEPN-01','STEPN-19')
+SampleID_order <- c('STEPN-16','STEPN-06','STEPN-10','STEPN-01','STEPN-17','STEPN-15',
+                    'STEPN-18','STEPN-19','STEPN-12')
 
 SampleName_vector <- metadata$SampleName
 SampleID_vector <- metadata$SampleID
@@ -191,3 +195,92 @@ ggsave(file.path(plot_dir, paste0('13_ImageDimPlot_malignant_STEPN12_Region_4.pd
 
 
 
+
+# Plot example to show MP assignment -----------------------------------------------------
+
+# read data
+SampleName = 'STEPN19_Region_2'
+data <- qread(file.path(input_dir, paste0('seurat_obj_', SampleName, '.qs')))
+
+# transform all colors in grey except for program of interest
+colors <- colors_metaprograms_Xenium
+
+colors <- ifelse(
+  names(colors) == "MES-like",
+  colors, # Keep original color for MES-like
+  "grey80"                   # Set to grey80 for others
+)
+names(colors) <- names(colors_metaprograms_Xenium)
+
+# plot by cell type
+p1 <- ImageDimPlot(data, group.by = 'cell_type',  fov = "fov", cols = colors,  border.size = NA, size = 1, 
+                   dark.background = F, axes = F) 
+# plot MES like score
+p2 <- ImageFeaturePlot(data, features = 'MES-like_UCell',  fov = "fov", cols = c('grey80', '#96410EFF'), 
+                   border.size = NA, size = 1, dark.background = F, axes = F, min.cutoff = 'q50', max.cutoff = "q95") 
+
+# create colors for Louvain clusters
+colors2 <- c(rep('grey80', 13))
+names(colors2) <- as.character(1:13)
+colors <- ifelse(
+  names(colors2) == "6",
+  "#96410EFF", # Keep original color for MES-like
+  "grey80"                   # Set to grey80 for others
+)
+names(colors) <- names(colors2)
+
+# plot by Louvain cluster
+p3 <- ImageDimPlot(data, group.by = 'SCT_snn_res.0.4',  fov = "fov", cols = colors,  
+                   border.size = NA, size = 1, 
+                   dark.background = F, axes = F)
+
+
+
+# transform all colors in grey except for program of interest
+colors <- colors_metaprograms_Xenium
+
+colors <- ifelse(
+  names(colors) == "Endothelial",
+  colors, # Keep original color for MES-like
+  "grey80"                   # Set to grey80 for others
+)
+names(colors) <- names(colors_metaprograms_Xenium)
+
+# plot by cell type
+p4 <- ImageDimPlot(data, group.by = 'cell_type',  fov = "fov", cols = colors,  border.size = NA, size = 1, 
+                   dark.background = F, axes = F) 
+# plot endothelial score
+colnames(data@meta.data) <- gsub(" ","_", colnames(data@meta.data))
+p5 <- ImageFeaturePlot(data, features = 'Endothelial_1_UCell',  fov = "fov", cols = c('grey80', "violetred3" ), 
+                       border.size = NA, size = 1, dark.background = F, axes = F, min.cutoff = 'q50', max.cutoff = "q95") 
+
+# create colors for Louvain clusters
+colors2 <- c(rep('grey80', 13))
+names(colors2) <- as.character(1:13)
+colors <- ifelse(
+  names(colors2) == "10",
+  "violetred3" , # Keep original color for MES-like
+  "grey80"                   # Set to grey80 for others
+)
+names(colors) <- names(colors2)
+
+# plot by Louvain cluster
+p6 <- ImageDimPlot(data, group.by = 'SCT_snn_res.0.4',  fov = "fov", cols = colors,  
+                   border.size = NA, size = 1, 
+                   dark.background = F, axes = F)
+
+
+
+
+# plot combined
+plot_grid(p1, p2, p3, p4, p5, p6, ncol = 3,
+          rel_widths = c(1, 1, 1))
+ggsave(file.path(plot_dir, paste0('14_Example_MP_assignment_STEPN19_Region_2.pdf')), width=15, height=10)
+
+
+
+
+# Plot correlation Xenium to sc/snRNA-seq -----------------------------------------------------
+SampleName_vector <- metadata$SampleName
+CalculateCorrelationMPXeniumSingleCell(seurat_object_path, SampleName_vector, cellid_dir, colors_metaprograms_Xenium) 
+ggsave(file.path(plot_dir, "15_correlation.pdf"), width=5.5, height=3.5) 
