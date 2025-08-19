@@ -1,0 +1,100 @@
+---
+title: "Correlation_Analysis"
+output: html_document
+date: "2025-06-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Configuration 
+
+## Load library
+```{r}
+library(data.table)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+
+int_dir = "analysis/adata_obj/"
+int_dir_cc = paste0(int_dir, "cc_res/")
+res_dir = "analysis/enrichment_integrative_analysis/"
+fig_dir = "figures/enrichment_integrative_analysis/"
+for (d in c(res_dir, fig_dir)){
+  if (!dir.exists(d)){
+    dir.create(d, recursive = T)
+  }
+}
+```
+
+## Load metadata
+```{r}
+# CellCharter results
+df_cc = data.table::fread(paste0(int_dir, "metadata.csv"), data.table = F)
+```
+
+## Clean metadata
+```{r}
+# CellCharter analysis 
+samples = sort(unique(df_cc$SampleName))
+df_cc$cell_id = paste(df_cc$cell_barcode, df_cc$SampleName, sep = "-")
+rownames(df_cc) = df_cc$cell_id
+```
+
+## Colors
+```{r}
+# Metaprograms
+colors_metaprograms_Xenium = readRDS("analysis/Metaprogram_palette.rds")
+
+# Spatial cluster colors
+colors_spatial_clusters = readRDS("analysis/Spatial_cluster_palette.rds")
+colors_spatial_clusters = c(colors_spatial_clusters, "white")
+```
+
+# Composition analysis
+
+## Cluster vs Metaprogram
+```{r}
+df_clust_meta_comp = table(df_cc$spatial_cluster, df_cc$Metaprogram)
+df_clust_meta_comp = df_clust_meta_comp / rowSums(df_clust_meta_comp)
+tmp = apply(df_clust_meta_comp, 1, function(x){
+  tmp = sort(x, decreasing = T)
+  return(names(tmp)[1:5])
+})
+df_clust_meta_comp_dict = lapply(colnames(tmp), function(x) tmp[,x])
+names(df_clust_meta_comp_dict) = colnames(tmp)
+```
+
+## Barplot (Figure-4C)
+```{r}
+clust_order = NULL
+top_metaprograms = sapply(df_clust_meta_comp_dict, function(x) x[1])
+sorted_names = names(sort(table(top_metaprograms), decreasing = T))
+for (i in sorted_names){
+  tmp = names(top_metaprograms[top_metaprograms == i])
+  tmp2 = names(sort(df_clust_meta_comp[tmp, i], decreasing = T))
+  clust_order = c(clust_order, tmp2)
+}
+data.frame(df_clust_meta_comp) %>%
+  mutate(Var2 = factor(Var2, levels = c(sorted_names, setdiff(colnames(df_clust_meta_comp), sorted_names)))) %>%
+  ggpubr::ggbarplot(
+    x = "Var1",
+    y = "Freq", 
+    fill = "Var2", 
+    order = clust_order
+  ) -> p
+p = p + 
+  coord_flip() +
+  scale_fill_manual(values = colors_metaprograms_Xenium) +
+  labs(title = "Metaprogram compositions of spatial clusters", x = "Spatial cluster", y = "Proportion", fill = "Metaprogram") +
+  theme(
+    plot.title = element_text(size = 12, hjust = 0.5),
+    axis.title = element_text(size = 18),
+    axis.text = element_text(size = 16),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    legend.position = "right"
+  )
+ggsave("Clust_meta_prop_barplot.pdf", plot = p, path = fig_dir, width = 6, height = 10)
+```

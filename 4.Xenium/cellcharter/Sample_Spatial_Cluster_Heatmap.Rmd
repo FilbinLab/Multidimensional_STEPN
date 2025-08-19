@@ -1,0 +1,262 @@
+---
+title: "Heatmap of spatial composition of each section"
+output: html_document
+date: "2025-06-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Configuration 
+
+## Load library
+```{r}
+library(data.table)
+library(dplyr)
+library(pheatmap)
+library(ggplot2)
+library(ggpubr)
+library(cowplot)
+library(ComplexHeatmap)
+library(circlize)
+library(qs)
+
+int_dir = "analysis/adata_obj/"
+int_dir_cc = paste0(int_dir, "cc_res/")
+res_dir = "analysis/enrichment_integrative_analysis/"
+fig_dir = "figures/enrichment_integrative_analysis/"
+for (d in c(res_dir, fig_dir)){
+  if (!dir.exists(d)){
+    dir.create(d, recursive = T)
+  }
+}
+```
+
+## Load metadata
+```{r}
+# CellCharter results
+df_cc = data.table::fread(paste0(int_dir, "metadata.csv"), data.table = F)
+```
+
+## Clean metadata
+```{r}
+# CellCharter analysis 
+samples = sort(unique(df_cc$SampleName))
+df_cc$cell_id = paste(df_cc$cell_barcode, df_cc$SampleName, sep = "-")
+rownames(df_cc) = df_cc$cell_id
+```
+
+## Load coherence scores
+```{r}
+ch_path = "/Users/ljiang/Partners HealthCare Dropbox/FilbinLab/projects/Ependymoma/12 - Xenium/analysis/6_coherence/data/"
+ch_files = list.files(ch_path)
+samples = NULL
+ch_scores = NULL
+for (i in ch_files){
+  sample_name = gsub("results_|.qs", "", i)
+  samples = c(samples, sample_name)
+  tmp = qread(paste0(ch_path, i))
+  ch_scores = c(ch_scores, tmp$coherence_score)
+}
+df_ch_scores = cbind.data.frame(samples, ch_scores)
+colnames(df_ch_scores) = c("SampleName", "coherence_score")
+rownames(df_ch_scores) = df_ch_scores$SampleName
+```
+
+## Colors
+```{r}
+# Metaprograms
+colors_metaprograms_Xenium = readRDS("analysis/Metaprogram_palette.rds")
+
+# Spatial cluster colors
+colors_spatial_clusters = readRDS("analysis/Spatial_cluster_palette.rds")
+colors_spatial_clusters = c(colors_spatial_clusters, "white")
+
+# PatientID
+colors_patients = readRDS("analysis/PatientID_palette.rds")
+```
+
+# Preprocessing
+
+## Compositional analysis
+```{r}
+df_clust_sample_comp = table(df_cc$SampleName, df_cc$spatial_cluster)
+df_clust_sample_comp = df_clust_sample_comp / rowSums(df_clust_sample_comp)
+df_clust_sample_comp = t(df_clust_sample_comp)
+saveRDS(df_clust_sample_comp, paste0(res_dir, "clust_sample_comp.rds"))
+```
+
+## Entropies 
+```{r}
+# Shannon entropy of spatial clusters 
+tmp = table(df_cc$spatial_cluster, df_cc$SampleName)
+tmp = tmp/rowSums(tmp)
+se_cluster_comp = apply(tmp, 1, function(x){
+  tmp = x[x!=0]
+  return(-sum(tmp*log2(tmp)))
+})
+se_cluster_comp = sort(se_cluster_comp)
+saveRDS(se_cluster_comp, paste0(res_dir, "Entropy_Metaprogram_Composition_in_Spatial_Cluster.rds"))
+
+# Shannon entropy of spatial clusters in each region
+se_sample_comp = apply(df_clust_sample_comp, 2, function(x){
+  tmp = x[x!=0]
+  return(-sum(tmp*log2(tmp)))
+})
+#se_sample_comp = sort(se_sample_comp)
+saveRDS(se_sample_comp, paste0(res_dir, "Entropy_Spatial_Cluster_Composition_in_Sample.rds"))
+
+# Shannon entropy of metaprograms in each region
+df_metaprogram_sample_comp = table(df_cc$SampleName, df_cc$Metaprogram)
+df_metaprogram_sample_comp = df_metaprogram_sample_comp / rowSums(df_metaprogram_sample_comp)
+saveRDS(df_metaprogram_sample_comp, paste0(res_dir, "metaprogram_sample_comp.rds"))
+se_meta_comp = apply(df_metaprogram_sample_comp, 1, function(x){
+  tmp = x[x!=0]
+  return(-sum(tmp*log2(tmp)))
+})
+saveRDS(se_meta_comp, paste0(res_dir, "Entropy_Metaprogram_Composition_in_Sample.rds"))
+```
+
+# Make heatmap 
+
+## Proportion matrix
+```{r}
+# Matrix of region level proportions, capped by 0.3
+df_plot = df_clust_sample_comp[names(se_cluster_comp), names(se_sample_comp)]
+df_plot = apply(df_plot, 2, function(x) return(ifelse(x >= 0.3, 0.3, x)))
+```
+
+## Row side bars
+```{r}
+# Data frame for row side bars
+df_plot_row = data.frame(
+  "entropy" = se_cluster_comp
+)
+
+# Row side bars
+row_lgd_fun = colorRamp2(c(0, 3, 6), rev(hcl.colors(3, "Grays")), space = "RGB")
+row_ha = rowAnnotation(
+  "entropy" = anno_simple(df_plot_row$entropy, col = row_lgd_fun),
+  show_legend = FALSE, 
+  annotation_name_side = "bottom"
+)
+```
+
+## Column side bars
+```{r}
+# Data frame for column side bars
+patient_ids = gsub("_Region_[1-9]", "", colnames(df_plot))
+patient_ids = gsub("EPN", "EPN-", patient_ids)
+df_plot_col = data.frame(
+  entropy_sc = se_sample_comp,
+  coherence = df_ch_scores[names(se_sample_comp), "coherence_score"],
+  entropy_meta = se_meta_comp[names(se_sample_comp)],
+  patient_id = patient_ids
+)
+saveRDS(df_plot_col, paste0(res_dir, "heatmap_col_df.rds"))
+
+# Column side bars
+## Entropy and coherence scores
+column_lgd_fun_1 = colorRamp2(c(0, 2, 4), rev(hcl.colors(3, "Greens")), space = "RGB")
+column_lgd_fun_2 = colorRamp2(c(2, 3, 4), rev(hcl.colors(3, "Purples")), space = "RGB")
+column_lgd_fun_3 = colorRamp2(c(2, 2.5, 3), rev(hcl.colors(3, "Blues")), space = "RGB")
+column_ha = HeatmapAnnotation(
+  df = df_plot_col,
+  col = list(
+    entropy_sc = column_lgd_fun_1,
+    coherence = column_lgd_fun_2,
+    entropy_meta = column_lgd_fun_3,
+    patient_id = colors_patients
+  ),
+  show_legend = FALSE
+)
+
+## Spatial cluster compositions
+# column_ha_2 = HeatmapAnnotation(
+#   composition = anno_barplot(
+#     t(df_clust_sample_comp[, names(se_sample_comp)]), 
+#     gp = gpar(fill = colors_spatial_clusters), 
+#     bar_width = 1, 
+#     height = unit(3, "cm")
+#   )
+# )
+```
+
+## Split
+```{r}
+split_vec = ifelse(se_cluster_comp <= median(se_cluster_comp), "below", "above")
+split_vec = factor(split_vec, levels = c("below", "above"))
+```
+
+## Make heatmap 
+```{r}
+ht = Heatmap(
+  mat = df_plot,
+  col = colorRamp2(c(0, 0.15, 0.3), rev(hcl.colors(3, "Reds3")), space = "RGB"),
+  name = "Proportion",
+  row_split = split_vec, 
+  row_gap = unit(3, "mm"),
+  top_annotation = column_ha, 
+  #bottom_annotation = column_ha_2,
+  right_annotation = row_ha,
+  rect_gp = gpar(col = "white", lwd = 1),
+  cluster_rows = F, 
+  cluster_columns = F,
+  show_column_names = F,
+  row_names_gp = gpar(fontsize = 12), 
+  column_names_gp = gpar(fontsize = 8)
+)
+```
+
+## Legends
+```{r}
+# Row legends
+lgd_row = Legend(col_fun = row_lgd_fun, title = "Entropy")
+  
+# Column legends
+lgd_col_1 = Legend(col_fun = column_lgd_fun_1, title = "Entropy-Spatial Cluster")
+lgd_col_2 = Legend(col_fun = column_lgd_fun_2, title = "Coherence score")
+lgd_col_3 = Legend(col_fun = column_lgd_fun_3, title = "Entropy-Metaprogram")
+lgd_col_4 = Legend(
+  labels = names(colors_patients),
+  legend_gp = gpar(fill = colors_patients),
+  title = "Patient ID"
+)
+# lgd_col_3 = Legend(
+#   labels = names(colors_spatial_clusters), 
+#   legend_gp = gpar(fill = colors_spatial_clusters), 
+#   title = "Spatial cluster"
+#   )
+```
+
+## Show and save heatmap (Figure-4C)
+```{r}
+lgd_list = list(lgd_row, lgd_col_1, lgd_col_2, lgd_col_3, lgd_col_4)
+pdf(paste0(fig_dir, "Clust_sample_prop_cropped_heatmap_full_final.pdf"), width = 12, height = 6)
+draw(ht, annotation_legend_list = lgd_list)
+dev.off()
+```
+
+## Barplot of spatial cluster compositions (Figure-E6D)
+```{r}
+data.frame(df_clust_sample_comp) %>%
+  ggpubr::ggbarplot(
+    x = "Var2",
+    y = "Freq", 
+    fill = "Var1"
+  ) -> p
+p = p + 
+  scale_fill_manual(values = colors_spatial_clusters) +
+  labs(title = "Metaprogram compositions of regions", x = "Region", y = "Proportion", fill = "Spatial cluster") +
+  theme(
+    plot.title = element_text(size = 24, hjust = 0.5),
+    axis.title = element_text(size = 18),
+    axis.text.x = element_text(size = 12, angle = 90, hjust = 1),
+    axis.text.y = element_text(size = 16),
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12),
+    legend.position = "right"
+  )
+ggsave("Clust_sample_prop_barplot.pdf", plot = p, path = fig_dir, width = 15, height = 6)
+```

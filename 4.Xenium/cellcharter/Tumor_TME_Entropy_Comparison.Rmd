@@ -1,0 +1,120 @@
+---
+title: "Correlation_Analysis"
+output: html_document
+date: "2025-06-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Configuration 
+
+## Load library
+```{r}
+library(data.table)
+library(dplyr)
+library(pheatmap)
+library(ggplot2)
+library(ggpubr)
+library(cowplot)
+library(ComplexHeatmap)
+library(circlize)
+library(qs)
+
+int_dir = "analysis/adata_obj/"
+int_dir_cc = paste0(int_dir, "cc_res/")
+res_dir = "analysis/enrichment_integrative_analysis/"
+fig_dir = "figures/enrichment_integrative_analysis/"
+for (d in c(res_dir, fig_dir)){
+  if (!dir.exists(d)){
+    dir.create(d, recursive = T)
+  }
+}
+```
+
+## Load metadata
+```{r}
+# CellCharter results
+df_cc = data.table::fread(paste0(int_dir, "metadata.csv"), data.table = F)
+```
+
+## Clean metadata
+```{r}
+# CellCharter analysis 
+samples = sort(unique(df_cc$SampleName))
+df_cc$cell_id = paste(df_cc$cell_barcode, df_cc$SampleName, sep = "-")
+rownames(df_cc) = df_cc$cell_id
+```
+
+## Load sample metadata 
+```{r}
+sample_metadata_path = "/Users/ljiang/Partners HealthCare Dropbox/FilbinLab/projects/Ependymoma/12 - Xenium/SampleIdentifier.xlsx"
+sample_metadata = readxl::read_xlsx(sample_metadata_path)
+sample_metadata = data.frame(sample_metadata)
+rownames(sample_metadata) = sample_metadata$SampleName
+```
+
+## Colors
+```{r}
+# Metaprograms
+colors_metaprograms_Xenium = readRDS("analysis/Metaprogram_palette.rds")
+
+# Spatial cluster colors
+colors_spatial_clusters = readRDS("analysis/Spatial_cluster_palette.rds")
+colors_spatial_clusters = c(colors_spatial_clusters, "white")
+
+# PatientID
+colors_patients = readRDS("analysis/PatientID_palette.rds")
+```
+
+## Entropies
+```{r}
+# Entropy of samples for each spatial cluster
+se_cluster_comp = readRDS(paste0(res_dir, "Entropy_Metaprogram_Composition_in_Spatial_Cluster.rds"))
+```
+
+# Entropy: normal-enriched vs tumor-enriched
+
+## Metaprogram composition
+```{r}
+normal_cell_types = c("Myeloid", "Endothelial", "T-cells")
+tumor_cell_types = grep("-like$", unique(df_cc$Metaprogram), value = T)
+
+df_clust_meta_comp = table(df_cc$spatial_cluster, df_cc$Metaprogram)
+df_clust_meta_comp = df_clust_meta_comp / rowSums(df_clust_meta_comp)
+normal_prop = apply(df_clust_meta_comp, 1, function(x) sum(x[normal_cell_types]))
+normal_prop = normal_prop[names(se_cluster_comp)]
+table(names(se_cluster_comp) == names(normal_prop))
+```
+
+## Boxplot of TME-enriched vs Tumor-enriched entropy (Figure-E6G)
+```{r}
+df_plot_tmp = cbind.data.frame(names(normal_prop), normal_prop, se_cluster_comp)
+colnames(df_plot_tmp) = c("clust", "prop", "entropy")
+#df_plot_tmp$type = ifelse(df_plot_tmp$clust %in% c('4', '14', '6', '18'), "TME-enriched", "Tumor-enriched")
+df_plot_tmp$type = ifelse(df_plot_tmp$prop >= 0.3, "TME-enriched", "Tumor-enriched")
+p = ggpubr::ggboxplot(
+  data = df_plot_tmp,
+  x = "type",
+  y = "entropy", 
+  add = "dotplot",
+  add_param = list(size = 2)
+)
+p = p + labs(x = "", y = "Entropy of sample proportions per cluster")
+ggsave("TME_Tumor_entropy_boxplot.pdf", plot = p, path = fig_dir, width = 4, height = 6)
+```
+
+## Permutation test to compute p-value
+```{r}
+set.seed(123456)
+permut_res = NULL
+for (i in 1:10000){
+  tmp = df_plot_tmp
+  tmp$type = sample(tmp$type)
+  tmp2 = tmp %>% filter(type == "TME-enriched") %>% summarise(mean(entropy))
+  tmp2 = as.numeric(tmp2)
+  permut_res = c(permut_res, tmp2 >= mean_val)
+}
+sum(permut_res)/length(permut_res) # p-value = 0.0166
+```

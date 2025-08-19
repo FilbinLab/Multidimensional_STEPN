@@ -1,0 +1,158 @@
+---
+title: "Correlation_Analysis"
+output: html_document
+date: "2025-06-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Configuration 
+
+## Load library
+```{r}
+library(data.table)
+library(dplyr)
+library(pheatmap)
+library(ggplot2)
+library(ggpubr)
+library(cowplot)
+
+int_dir = "analysis/adata_obj/"
+int_dir_cc = paste0(int_dir, "cc_res/")
+res_dir = "analysis/correlation_analysis/"
+fig_dir = "figures/correlation_analysis/"
+for (d in c(res_dir, fig_dir)){
+  if (!dir.exists(d)){
+    dir.create(d, recursive = T)
+  }
+}
+```
+
+## Load data
+```{r}
+# CellCharter results
+df_cc = data.table::fread(paste0(int_dir, "metadata.csv"), data.table = F)
+```
+
+## Clean data
+```{r}
+# CellCharter analysis 
+samples = sort(unique(df_cc$SampleName))
+df_cc$cell_id = paste(df_cc$cell_barcode, df_cc$SampleName, sep = "-")
+rownames(df_cc) = df_cc$cell_id
+```
+
+## Colors
+```{r}
+colors_metaprograms_Xenium = readRDS("analysis/Metaprogram_palette.rds")
+colors_metaprograms_Xenium = colors_metaprograms_Xenium[1:(length(colors_metaprograms_Xenium) - 1)]
+```
+
+# Correlation between metaprogram compositions of meta-niches and spatial clusters 
+
+## Load and clean niche and meta-niche results 
+```{r}
+niche_dir = "/Users/ljiang/Partners HealthCare Dropbox/FilbinLab/projects/Ependymoma/12 - Xenium/analysis/4_niche/"
+
+# Niche analysis 
+niche_files = list.files(paste0(niche_dir, "niche_csvs"))
+niche_res = NULL
+for (f in niche_files){
+  print(paste0(Sys.time(), ": ", f))
+  sample_name = gsub(".csv", "", f)
+  tmp = data.table::fread(paste0(niche_dir, "niche_csvs/", f), data.table = F)
+  tmp$SampleName = sample_name
+  niche_res = rbind(niche_res, tmp)
+}
+niche_res = niche_res[, c("cell_id", "group", "SampleName", "niche_6")]
+
+# Meta-niche analysis
+meta_niche_res = data.table::fread(paste0(niche_dir, "metaniches_assignment_resolution6_clusters6.csv"), data.table = F)
+meta_niche_res$SampleName = sapply(meta_niche_res$identifier, function(x){
+  tmp = gsub("Niche_[1-9]-", "", x)
+})
+meta_niche_res$niche = sapply(meta_niche_res$identifier, function(x){
+  tmp = unlist(strsplit(x, split = "-", fixed = T))[1]
+  tmp = gsub("Niche_", "", tmp)
+})
+```
+
+## Match niche to metaniche
+```{r}
+niche_res$combo = paste(niche_res$SampleName, niche_res$niche_6, sep = "-")
+meta_niche_res$combo = paste(meta_niche_res$SampleName, meta_niche_res$niche, sep = "-")
+
+niche_res$metaniche = plyr::mapvalues(niche_res$combo, from = meta_niche_res$combo, to = meta_niche_res$metaniche)
+rownames(niche_res) = paste(niche_res$cell_id, niche_res$SampleName, sep = "-")
+niche_res = niche_res[rownames(df_cc), ]
+```
+
+## Compute cell compositions of metaniche
+```{r}
+metaniche_comp = table(niche_res$metaniche, niche_res$group)
+metaniche_comp = metaniche_comp / rowSums(metaniche_comp)
+```
+
+## Group spatial clusters based on most abundant metaprograms
+```{r}
+tmp = table(df_cc$spatial_cluster, df_cc$Metaprogram)
+tmp = tmp / rowSums(tmp)
+tmp = rbind(tmp)
+tmp = data.frame(tmp, check.names = F)
+tmp$type = apply(tmp, 1, function(x) names(sort(x, decreasing = T))[1])
+df_cc$sc_group = plyr::mapvalues(df_cc$spatial_cluster, from = rownames(tmp), to = tmp$type)
+
+sc_comp = table(df_cc$sc_group, df_cc$Metaprogram)
+sc_comp = sc_comp / rowSums(sc_comp)
+
+# Piechart
+sc_comp_long = reshape2::melt(sc_comp)
+p = ggpubr::ggpie(
+  data = sc_comp_long,
+  x = "value",
+  label = "Var2",
+  fill = "Var2",
+  lab.font = 0
+)
+p = facet(p, facet.by = "Var1")
+p = p + 
+  scale_fill_manual(values = colors_metaprograms_Xenium) +
+  theme(
+    strip.text = element_text(size = 12),
+    strip.background = element_blank(),
+    legend.position = "None"
+  )
+ggsave("Spatial_Cluster_Composition.pdf", plot = p, path = fig_dir, width = 9, height = 6)
+```
+
+## Pairwise correlation (Figure-E6F)
+```{r}
+table(colnames(metaniche_comp) == colnames(sc_comp))
+to_plot = list(c("1", "Endothelial"), c("2", "MES-like"), c("3", "Neuroepithelial-like"), c("4", "Neuronal-like"), c("6", "Myeloid"))
+
+plot_list = list()
+for (i in to_plot){
+  df = cbind.data.frame(metaniche_comp[i[1], ], sc_comp[i[2], ])
+  colnames(df) = c("MetaNiche", "SpatialCluster")
+  p = ggpubr::ggscatter(
+    data = df,
+    x = "MetaNiche",
+    y = "SpatialCluster",
+    add = "reg.line", 
+    add.params = list(color = "blue", fill = "lightgray"), 
+    conf.int = TRUE, 
+    cor.coef = TRUE, 
+    cor.coeff.args = list(method = "pearson", label.x = 0, label.sep = "\n", size = 5)
+  )
+  p = p + labs(x = paste0("Meta-niche (", i[1], ")"), 
+               y = paste0("Spatial Cluster (", i[2], ")"))
+  p = p + theme(plot.title = element_text(size = 14, hjust = 1),
+                axis.title = element_text(size = 12),
+                axis.text = element_text(size = 12))
+  plot_list[[paste0(i[1], "_", i[2])]] = p
+}
+cowplot::plot_grid(plotlist = plot_list, ncol = 2)
+ggsave("metaniche_spatial_cluster_cor.pdf", path = fig_dir, width = 6, height = 9)
+```

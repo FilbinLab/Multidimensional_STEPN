@@ -90,3 +90,20 @@ To plot results, use script in the folder `plots/Plot_coherence_score.R`
 ## 6. Plot
 All scripts to plot final results can be found in the `plot` folder.
 
+## 7. CellCharter analysis 
+All scripts to run the CellCharter analysis and plot results can be found in the `cellcharter` folder. 
+
+CellCharter analysis is performed in three steps using python.
+(1) Preprocessing by `scanpy`: `ST_EPN_scanpy.ipynb`. 
+(2) Dimension reduction by `scVI`: `ST_EPN_scvi.ipynb`. 
+(3) cellcharter analysis: `ST_EPN_cellcharter_k26.ipynb`.
+
+Figures are generated using R.
+(1) Figure-4C: Proportions of metaprograms of spatial clusters (`SpatialCluster_Metaprogram_Composition.Rmd`)
+(2) Figure-4D: Heatmap of spatial clusters propotions of samples (`Sample_Spatial_Cluster_Heatmap.Rmd`)
+(3) Figure-E6D: Proportions of spatial clusters of samples (`Sample_Spatial_Cluster_Heatmap.Rmd`)
+(4) Figure-E6F: Pairwise correlation in metaprogram compositions between CellCharter and Meta-niche analysis (`SpatialCluster_MetaNiche_Correlation.Rmd`)
+(5) Figure-E6G: Comparing entropies of sample composition between Tumor-enriched and TME-enriched spatial clusters (`Tumor_TME_Entropy_Comparison.Rmd`)
+
+
+
