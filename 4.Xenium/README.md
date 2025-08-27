@@ -31,25 +31,25 @@ Running under: Red Hat Enterprise Linux 9.5 (Plow)
 
 ## Processing 
 
-#### 0. Preparation of single-cell object from ZFTA-RELA patients for label transfer
+### 0. Preparation of single-cell object from ZFTA-RELA patients for label transfer
 Script `0_preparation_scRNAseq_data.R` subsets the sc/snRNA-seq object to ZFTA-RELA patients only (includes both malignant and non-malignant cells) and applies sctransform normalization.
 
-#### 1. Pre-processing of 10X Xenium output files
+### 1. Pre-processing of 10X Xenium output files
 Script `1_preprocessing.R` preprocesses the output files from 10X Xenium by subsetting the files to cells with nCount>0, running SCTransform-based normalization, PCA and UMAP dimensionality reduction. 
 
-#### 2. Assign cell identities
+### 2. Assign cell identities
 Script `2_assign_programs.R` takes the sc/snRNA-seq object identities, and projects them onto the Xenium data. It then scores each cell for the identities used to build the Xenium panel, and assign a final cell identity to the Xenium cells.
 
-#### 3. Niche analysis
+### 3. Niche analysis
 Script `3_NicheAnalysis.R` performs spatial niche analysis.
 
-#### 4. Coherence analysis
+### 4. Coherence analysis
 Script `4_coherence.R` performs the coherence analysis and saves the results.
 
-#### 5. Figures
+### 5. Figures
 Scripts to plot final results can be found in the `figures` folder.
 
-#### 6. CellCharter analysis 
+### 6. CellCharter analysis 
 All scripts to run the CellCharter analysis and plot results can be found in the `cellcharter` folder. 
 
 CellCharter analysis is performed in three steps using python.
