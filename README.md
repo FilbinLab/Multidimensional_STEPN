@@ -32,11 +32,17 @@ Codes to plot most paper figures from ST-EPN patient samples
 Codes to plot Extended figure 3 and to plot developmental projections of Fig. 1f and Fig E2a. To prepare the reference datasets, the codes stored in the folder `Developmental_dataset_processing` are used.
 
 ## 4. 10X Xenium
-The folder contains the following subfolders:
-`1-preprocessing`: to annotate Xenium cells with tumor cell states/types
-`2-plots`: to display spatial maps
-`3-neighborhood`: Python code to calculate cellular neighborhoods
-`4-spatial_coherence`: code to display the spatial coherence results
+Code to perform the spatial data analysis. It contains following scripts:
+- `0_preparation_scRNAseq_data.R`: prepare single cell objects for label transfer onto spatial data for annotations.
+- `1_preprocessing.R`: load and preprocess Xenium data.
+- `2_assign_programs.R`: perform annotation of the preprocessed Xenium data.
+- `3_NicheAnalysis.R`: perform niche analysis on the data.
+- `4_coherence.R`: perform coherence analysis on the data.
+
+It also contains following folders:
+- `resources`: contains metadata, and helper functions to process the data and generate results.
+- `figures`: contains code to generate the figures involving spatial analysis in the manuscript.
+- `cellcharter`: contains scripts to run the CellCharter analysis and plot results.
 
 ## 5.Co-culture
 Experiment to determine the cell state shifts between EP1NS cells cultures alone (monoculture) or with rat neurons and astrocytes (coculture).

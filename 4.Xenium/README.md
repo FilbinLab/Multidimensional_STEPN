@@ -1,96 +1,55 @@
 # Xenium analysis
 
+## Requirements
 
-## 0. Software version requirements 
+#### R information
 
-All code was run in R version 4.3.1, Python v3.10.11, and Seurat v.5.0.2. 
+```
+R version 4.4.2 (2024-10-31)
+Platform: x86_64-pc-linux-gnu
+Running under: Red Hat Enterprise Linux 9.5 (Plow)
+```
 
+#### Packages
+```
+ [1] RColorBrewer_1.1-3 paletteer_1.6.0    miceadds_3.17-44  
+ [4] mice_3.16.0        progress_1.2.3     UCell_2.8.0       
+ [7] yaml_2.3.10        crayon_1.5.3       patchwork_1.3.0   
+[10] readxl_1.4.5       Seurat_5.3.0       SeuratObject_5.1.0
+[13] sp_2.2-0           qs_0.27.3          glue_1.8.0        
+[16] lubridate_1.9.4    forcats_1.0.0      stringr_1.5.1     
+[19] dplyr_1.1.4        purrr_1.0.4        readr_2.1.5       
+[22] tidyr_1.3.1        tibble_3.2.1       ggplot2_3.5.2     
+[25] tidyverse_2.0.0 
+```
 
-## 1. Preparation of single-cell object from ZFTA-RELA patients for label transfer
+## Set Up
+
+- In each script in the processing of Xenium data, we load the file in `resources/epn_functions.R`, and the functions in `resources/FLXenium`. User would need to change the paths to these files according to their filesystem in `0_preparation_scRNAseq_data.R`, `1_preprocessing.R` etc. so that they are loaded successfully.
+
+- Secondly, the user would need to go to the file `resources/epn_functions.R` and change the default values of the arguments `home_dir` and `data_dir` in functions `SetUpEpendymomaGlobalVars` and `SetUpEpendymomaGlobalVarsGeneral`. home_dir point to `Multidimensional_STEPN/4.Xenium`, and the data_dir should point to the directory where the user wants the analyses results to be stored after processing. data_dir also indicates where the raw files are stored (`{data_dir}/raw_data/xenium_folders`, `{data_dir}/analysis/1_preparation/data/seurat_obj_ST_normal_malig_annotated.qs`, `{data_dir}/analysis/1_preparation/data/seurat_obj_malignant_annotated2.qs`)
+
+## Processing 
+
+#### 0. Preparation of single-cell object from ZFTA-RELA patients for label transfer
 Script `0_preparation_scRNAseq_data.R` subsets the sc/snRNA-seq object to ZFTA-RELA patients only (includes both malignant and non-malignant cells) and applies sctransform normalization.
 
-## 2. Pre-processing of 10X Xenium output files
-Script `1_preprocessing_v2.R` preprocesses the output files from 10X Xenium by subsetting the files to cells with nCount>0, running SCTransform-based normalization, PCA and UMAP dimensionality reduction.
+#### 1. Pre-processing of 10X Xenium output files
+Script `1_preprocessing.R` preprocesses the output files from 10X Xenium by subsetting the files to cells with nCount>0, running SCTransform-based normalization, PCA and UMAP dimensionality reduction. 
 
-To run all samples in parallel, use:
+#### 2. Assign cell identities
+Script `2_assign_programs.R` takes the sc/snRNA-seq object identities, and projects them onto the Xenium data. It then scores each cell for the identities used to build the Xenium panel, and assign a final cell identity to the Xenium cells.
 
-```
-#!/bin/bash
-
-# Loop through each line in the input file
-while IFS=, read -r SampleName SampleID; do
-  # Remove leading and trailing whitespace (including carriage return characters)
-  SampleName=$(echo "$SampleName" | tr -d '\r')
-
-  # Execute your shell script with the sanitized FolderName
-  sh /n/scratch/users/s/sad167/EPN/Xenium/scripts_revisions/1c_preprocessing_v2.sh $SampleName
-done < /n/scratch/users/s/sad167/EPN/Xenium/scripts_revisions/SampleIdentifier.csv
-```
-
-
-
-## 3. Assign cell identities
-Script `2_assign_programs_automatic.R` takes the sc/snRNA-seq object identities, and projects them onto the Xenium data. It then scores each cell for the identities used tp build the Xenium panel, and assign a final cell identity to the Xenium cells.
-
-To run all samples in parallel, use:
-
-```
-#!/bin/bash
-
-# Loop through each line in the input file
-while IFS=, read -r SampleName SampleID; do
-  # Remove leading and trailing whitespace (including carriage return characters)
-  SampleName=$(echo "$SampleName" | tr -d '\r')
-
-  # Execute your shell script with the sanitized FolderName
-  sh /n/scratch/users/s/sad167/EPN/Xenium/scripts_revisions/2c_assign_programs_automatic.sh $SampleName
-done < /n/scratch/users/s/sad167/EPN/Xenium/scripts_revisions/SampleIdentifier.csv
-```
-
-## 4. Niche analysis
+#### 3. Niche analysis
 Script `3_NicheAnalysis.R` performs spatial niche analysis.
 
+#### 4. Coherence analysis
+Script `4_coherence.R` performs the coherence analysis and saves the results.
 
-To run all samples in parallel, use:
+#### 5. Figures
+Scripts to plot final results can be found in the `figures` folder.
 
-```
-#!/bin/bash
-
-# Loop through each line in the input file
-while IFS=, read -r SampleName SampleID; do
-  # Remove leading and trailing whitespace (including carriage return characters)
-  SampleName=$(echo "$SampleName" | tr -d '\r')
-
-  # Execute your shell script with the sanitized FolderName
-  sh /n/scratch/users/s/sad167/EPN/Xenium/scripts_revisions/3c_NicheAnalysis.sh $SampleName
-done < /n/scratch/users/s/sad167/EPN/Xenium/scripts_revisions/SampleIdentifier.csv
-```
-
-## 5. Spatial coherence score
-Script `4_coherence.R` calculates spatial coherence score for each sample
-
-To run all samples in parallel, use:
-
-```
-#!/bin/bash
-
-# Loop through each line in the input file
-while IFS=, read -r SampleName SampleID; do
-  # Remove leading and trailing whitespace (including carriage return characters)
-  SampleName=$(echo "$SampleName" | tr -d '\r')
-
-  # Execute your shell script with the sanitized FolderName
-  sh /n/scratch/users/s/sad167/EPN/Xenium/scripts_revisions/4c_coherence.sh $SampleName
-done < /n/scratch/users/s/sad167/EPN/Xenium/scripts_revisions/SampleIdentifier.csv
-```
-
-To plot results, use script in the folder `plots/Plot_coherence_score.R`
-
-
-## 6. Plot
-All scripts to plot final results can be found in the `plot` folder.
-
-## 7. CellCharter analysis 
+#### 6. CellCharter analysis 
 All scripts to run the CellCharter analysis and plot results can be found in the `cellcharter` folder. 
 
 CellCharter analysis is performed in three steps using python.
