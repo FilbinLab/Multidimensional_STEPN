@@ -27,7 +27,7 @@ Running under: Red Hat Enterprise Linux 9.5 (Plow)
 
 - In each script in the processing of Xenium data, we load the file in `resources/epn_functions.R`, and the functions in `resources/FLXenium`. User would need to change the paths to these files according to their filesystem in `0_preparation_scRNAseq_data.R`, `1_preprocessing.R` etc. so that they are loaded successfully.
 
-- Secondly, the user would need to go to the file `resources/epn_functions.R` and change the default values of the arguments `home_dir` and `data_dir` in functions `SetUpEpendymomaGlobalVars` and `SetUpEpendymomaGlobalVarsGeneral`. home_dir point to `Multidimensional_STEPN/4.Xenium`, and the data_dir should point to the directory where the user wants the analyses results to be stored after processing. data_dir also indicates where the raw files are stored (`{data_dir}/raw_data/xenium_folders`, `{data_dir}/analysis/1_preparation/data/seurat_obj_ST_normal_malig_annotated.qs`, `{data_dir}/analysis/1_preparation/data/seurat_obj_malignant_annotated2.qs`)
+- Secondly, the user would need to go to the file `resources/epn_functions.R` and change the default values of the arguments `home_dir` and `data_dir` in functions `SetUpEpendymomaGlobalVars` and `SetUpEpendymomaGlobalVarsGeneral`. Argument home_dir should point to `Multidimensional_STEPN/4.Xenium` location, and the data_dir should point to the directory where the user wants the analyses results to be stored after processing. data_dir also indicates where the raw files are stored (`{data_dir}/raw_data/xenium_folders`, `{data_dir}/analysis/1_preparation/data/seurat_obj_ST_normal_malig_annotated.qs`, `{data_dir}/analysis/1_preparation/data/seurat_obj_malignant_annotated2.qs`)
 
 ## Processing 
 
