@@ -20,7 +20,7 @@ Running under: Red Hat Enterprise Linux 9.5 (Plow)
 [16] lubridate_1.9.4    forcats_1.0.0      stringr_1.5.1     
 [19] dplyr_1.1.4        purrr_1.0.4        readr_2.1.5       
 [22] tidyr_1.3.1        tibble_3.2.1       ggplot2_3.5.2     
-[25] tidyverse_2.0.0 
+[25] tidyverse_2.0.0    car_3.1.3
 ```
 
 ## Set Up

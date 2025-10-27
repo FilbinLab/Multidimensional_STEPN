@@ -2,10 +2,10 @@
 
 # source the functions from FLXenium folder, which loads useful libraries and has 
 # a bunch of functions useful for general analysis of spatial data
-miceadds::source.all('~/FLXenium/functions/')
+miceadds::source.all('~/Multidimensional_STEPN/4.Xenium/resources/FLXenium/')
 
 # source the ependymoma project specific functions
-source('~/ependymoma/xenium/scripts_revisions/resources/epn_functions.R')
+source('~/Multidimensional_STEPN/4.Xenium/resources/epn_functions.R')
 
 # get the vars for epn analyses
 all_vars <- SetUpEpendymomaGlobalVarsGeneral()
@@ -22,7 +22,7 @@ zfta_reference <- qread(all_vars$zfta_reference)
 
 ### panel b
 
-PlotCompositionComparisonSpatialSC(zfta_reference, metadata, cellid_dir)
+PlotCompositionComparisonSpatialSC(zfta_reference, metadata, cellid_dir, transform_proportions = T)
 
 ### panel d
 
@@ -34,12 +34,12 @@ PlotXeniumMetaprogramsCoherence(
 
 OverallCoherenceCelltypeProportionLinearRegression(
   metadata, cellid_dir, coherence_data_dir, average_by_sample_id = TRUE,
-  colors = colors_metaprograms_Xenium_dot_separator)
+  colors = colors_metaprograms_Xenium_dot_separator, transform_proportions = T)
 
 ### panel f
 
-OverallCoherenceCelltypeProportionLinearRegressionAfterRemoval(
-  celltype_to_remove = 'MES-like', metadata, cellid_dir, coherence_data_dir, average_by_sample_id = TRUE)
+MetaprogramCoherenceBoxplots(
+  metadata, coherence_data_dir, average_by_sample_id = TRUE, colors = colors_metaprograms_Xenium)
 
 
 

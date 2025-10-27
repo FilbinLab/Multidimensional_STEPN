@@ -1000,7 +1000,10 @@ PlotXeniumMetaprogramsCoherence <- function(metadata, cellid_dir, coherence_dir,
 # read in the coherence information for the samples and proportions of different celltypes in them, and 
 # compute linear regression and make the corresponding plots.
 # NOTE: Ensure that metadata has only those entries which need to be worked on
-OverallCoherenceCelltypeProportionLinearRegression <- function(metadata, cellid_dir, coherence_dir, average_by_sample_id, colors) {
+# On 10-21, added new argument transform_proportions, which specifies if we want to transform the proportion values 
+# before the LR and making the plot. This was required for the second review when we performed a multiple linear 
+# regression using all celltypes
+OverallCoherenceCelltypeProportionLinearRegression <- function(metadata, cellid_dir, coherence_dir, average_by_sample_id, colors, transform_proportions = F) {
   library(reshape)
   # since we don't want discrepancies between metadata and sample_names, we are extracting sample_names from metadata only. 
   # Hence, one needs to ensure that metadata has only those entries which need to be worked on
@@ -1020,6 +1023,11 @@ OverallCoherenceCelltypeProportionLinearRegression <- function(metadata, cellid_
   # ensure that every combination of Identifier and group is present in the data, and if they were not present till now, their proportions will be 0
   metaprogram_proportion_complete <- metaprogram_proportion %>% 
     complete(Identifier, group, fill = list(proportions = 0))
+  # here, according to transform_proportions argument value, we transform the proportion values in metaprogram_proportion_complete using logit transformation
+  if (transform_proportions == T){
+    library(car)
+    metaprogram_proportion_complete$proportions <- logit(metaprogram_proportion_complete$proportions/100, percents = F, adjust = 0.025)
+  }
   # cast the just created df into wide form so that we have Identifier x group shape of df.
   metaprogram_proportion_wide <- cast(metaprogram_proportion_complete, Identifier~group, value = 'proportions')
   
@@ -1058,6 +1066,7 @@ OverallCoherenceCelltypeProportionLinearRegression <- function(metadata, cellid_
   # Loop over each predictor and perform regression using just that
   for (cell_type in cell_types){
     # cell_type <- 'T.cells'
+    # cell_type = 'Embryonic.like'
     # Dynamically create the formula. Make quoted because else as.formula() function splits string open at the hyphen 
     formula <- as.formula(paste("scaled_spatial_coherence ~", cell_type))
     # Fit the linear model
@@ -1079,18 +1088,23 @@ OverallCoherenceCelltypeProportionLinearRegression <- function(metadata, cellid_
                                                tValue = coefficients[2, "t value"], pValue = p_value, correlation = correlation))
     # Create and save the plot
     plot_list[[cell_type]] <- ggplot(data.frame(linear_regression_df, celltype = cell_type), aes(x = scaled_spatial_coherence, y = .data[[cell_type]], color = celltype)) +
-      labs(x = "Scaled spatial coherence score", y = cell_type) +
+      # labs(x = "Scaled spatial coherence score", y = cell_type) +
       geom_smooth(method = 'lm', se = TRUE, color = 'black') +
       geom_point(size = 4) +
       scale_color_manual(values = colors) + 
       theme_classic() + 
       theme(legend.position = 'none') +
-      labs(subtitle = paste0('r = ', round(correlation, 2), ', R² = ', round(r_squared, 2), ', pval: ', signif(p_value, 3), ', adj. pval: ', signif(min(p_value*length(cell_types), 1), 3)))
+      labs(title = paste0(cell_type, '\n', 'R = ', round(correlation, 2), ', R² = ', round(r_squared, 2), '\nAdj p-value: ', signif(min(p_value*length(cell_types), 1), 3), ', n = ', nrow(linear_regression_df))) +
+      ylab('Transformed Proportion') + xlab('Spatial coherence score') + 
+      theme(plot.title = element_text(hjust = 0.5), 
+            axis.title.x = element_text(size = 13), axis.title.y = element_text(size = 13),
+            axis.text = element_text(size = 8.5),
+            axis.text.x = element_text(hjust = 1, vjust = 0.5, angle = 90))
   }
   # Export results to a CSV file
   # write.csv(results_df, file.path(plot_dir, "15_Simple_linear_regression_results.csv"), row.names = FALSE)
   # plot 
-  combined_plot <- patchwork::wrap_plots(plot_list, ncol = 5)
+  combined_plot <- patchwork::wrap_plots(plot_list, ncol = 4)
   return(combined_plot)
 }
 
@@ -1179,7 +1193,7 @@ OverallCoherenceCelltypeProportionLinearRegressionAfterRemoval <- function(cellt
 # metadata should have only those samples which are to be included in the analysis (in EPN project, we had 
 # multiple plots for the different cancertypes, hence this point).
 # sc_data should have the single cell data (which we need the proportions from only) with annotations in the cell_type col.
-PlotCompositionComparisonSpatialSC <- function(sc_data, metadata, cellid_dir){
+PlotCompositionComparisonSpatialSC <- function(sc_data, metadata, cellid_dir, transform_proportions = F){
   # get the sample_names, sample_ids from metadata
   sample_names <- metadata$SampleName
   sample_ids <- metadata$SampleID
@@ -1196,9 +1210,17 @@ PlotCompositionComparisonSpatialSC <- function(sc_data, metadata, cellid_dir){
   linear_regression_df <- spatial_props %>% full_join(sc_props, by = 'cell_type')
   linear_regression_df[is.na(linear_regression_df)] <- 0 # fill the na values by 0
   
+  # at this point, according to the value of the parameter transform_proportions, we perform a logit transformation
+  # on the proportions_spatial and proportions_sc in proportions in linear_regression_df
+  if (transform_proportions == T){
+    library(car)
+    linear_regression_df$proportions_sc <- logit(linear_regression_df$proportions_sc/100, percent = F, adjust = 0.025)
+    linear_regression_df$proportions_spatial <- logit(linear_regression_df$proportions_spatial/100, percent = F, adjust = 0.025)
+  }
+  
   # now do the regression
   linear_reg_result <- PerformLinearRegression(linear_regression_df, 'proportions_sc', 'proportions_spatial')
-  plot <- PlotLinearRegression(linear_regression_df, linear_reg_result, x_label = 'Proportion Smart-seq2, %', y_label = 'Proportion Xenium, %', color = colors_metaprograms_Xenium, color_col = 'cell_type')
+  plot <- PlotLinearRegression(linear_regression_df, linear_reg_result, x_label = 'Proportion Smart-seq2', y_label = 'Proportion Xenium', color = colors_metaprograms_Xenium, color_col = 'cell_type')
   return (plot)
 }
 
