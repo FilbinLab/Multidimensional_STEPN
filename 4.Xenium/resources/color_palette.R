@@ -228,6 +228,13 @@ color_coherence_density_without_white <- c(
 
 color_dotplot <- c('#d5eadb', '#67c3ac', '#30acac', '#318fa8', '#3180a4', '#3a5d9d', '#403e7d', '#36264e', '#372854')
 
+# color palette for the single cell reference object
+colors_sc_ref <- c("#4682B4", "#96410EFF", "#F99E93FF", '#0F4F8B', "#9E5E9BFF", '#e01e37', 
+                   "#46B478", "#46B478", "#ACD39EFF", '#55A19EFF', 'violetred3', "#B4AF46")
+names(colors_sc_ref) <- c("IPCs", "Mesenchymal", "Neuroepithelial", "Neuronal", 
+                          "Radial glia", "Early radial glia", "MGE inhibitory neuron lineage", "MGE inhibitory", 
+                          "Choroid", "Newborn/maturing neuron", "OPC", "Astrocyte")
+
 
 
 

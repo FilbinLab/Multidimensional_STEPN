@@ -3,7 +3,7 @@
 # set up the global vars of the epn project, without any sample_specific variables
 # home_dir: where the code, and light weight files, like metadata etc are stored
 # data_dir: where the heavy files, like raw and processed data are stored
-SetUpEpendymomaGlobalVarsGeneral <- function(home_dir = '/home/shk490/ependymoma/xenium/scripts_revisions', 
+SetUpEpendymomaGlobalVarsGeneral <- function(home_dir = '/home/shk490/Multidimensional_STEPN/4.Xenium', 
                                              data_dir = '/n/data1/dfci/pedonc/filbin/lab/users/shk490/ependymoma'){
   ### get metadata
   metadata <- read_xlsx(glue('{home_dir}/resources/SampleIdentifier.xlsx'))
@@ -24,6 +24,7 @@ SetUpEpendymomaGlobalVarsGeneral <- function(home_dir = '/home/shk490/ependymoma
   manual_annotation_yaml <- glue('{home_dir}/resources/normal_celltypes_manual_annotation.yaml')
   raw_data_dir <- glue('{data_dir}/raw_data/xenium_folders')
   sc_mal_path <- glue('{preparation_dir}/data/seurat_obj_malignant_annotated2.qs') # mal only single cell object path
+  sc_full_path <- glue('{preparation_dir}/data/seurat_obj_ST_normal_malig_annotated.qs') # all cells (mal and normal and from all subtypes) object
   sc_reference <- glue('{preparation_dir}/data/Nowakowski_Eze.qs') # single cell reference object path (Nowakowski + Eze)
   zfta_reference <- glue('{data_dir}/analysis/1_preparation/data/ZR_Xenium_projection.qs')
   nc_reference <- glue('{data_dir}/analysis/1_preparation/data/NC_Xenium_projection.qs')
@@ -59,6 +60,7 @@ SetUpEpendymomaGlobalVarsGeneral <- function(home_dir = '/home/shk490/ependymoma
   all_vars$manual_annotation_yaml <- manual_annotation_yaml
   all_vars$raw_data_dir <- raw_data_dir
   all_vars$sc_mal_path <- sc_mal_path
+  all_vars$sc_full_path <- sc_full_path
   all_vars$sc_reference <- sc_reference
   all_vars$zfta_reference <- zfta_reference
   all_vars$nc_reference <- nc_reference
@@ -71,7 +73,7 @@ SetUpEpendymomaGlobalVarsGeneral <- function(home_dir = '/home/shk490/ependymoma
 }
 
 # set up the sample-specific (and general) global vars for the ependymoma project
-SetUpEpendymomaGlobalVars <- function(sample_name, home_dir = '/home/shk490/ependymoma/xenium/scripts_revisions', 
+SetUpEpendymomaGlobalVars <- function(sample_name, home_dir = '/home/shk490/Multidimensional_STEPN/4.Xenium', 
                                       data_dir = '/n/data1/dfci/pedonc/filbin/lab/users/shk490/ependymoma'){
   
   # sample_name <- 'STEPN06_Region_1' # for testing code
@@ -786,7 +788,7 @@ CheckIfPixelIsACelltype <- function(coor1, coor2, mat, program, empty_neighbors_
   return (0)
 }
 
-# plot the gridding of the coherence and save at the appropriate location. Needs some cleaning. Hurried through because of EPN rush.
+# plot the gridding of the coherence and save at the appropriate location. Can benefit from some reorganization.
 gridding_coherence_density <- function(gridding, coherence, sample_name, color_coherence_density, colors_metaprograms_Xenium) {
   
   # make the gridding plot

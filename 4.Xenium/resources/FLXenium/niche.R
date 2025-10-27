@@ -126,6 +126,7 @@ PlotNicheResults <- function(sample_name, niche_dir, niche_resolution, colors_me
 # return a list of heatmap object and pi chart object
 # plot_suffix stores a string to append at the end in the name of plots (was used when we made plots for just Primary and just Reccurence samples)
 HeatmapNicheCorrelation <- function(metadata, niche_dir, niche_resolution, n_clusters, plot_dir, plot_suffix = ''){
+  library(ComplexHeatmap)
   library(dendextend)
   library(progress)
   library(scales)
