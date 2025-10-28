@@ -1,4 +1,4 @@
-# code for extended figure 6
+# code for extended figure 6 panel b
 
 # source the functions from FLXenium folder, which loads useful libraries and has 
 # a bunch of functions useful for general analysis of spatial data
