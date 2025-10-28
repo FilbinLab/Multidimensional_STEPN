@@ -17,7 +17,7 @@ base_dir <- '/n/scratch/users/c/cao385/Ependymoma/10x'
 ################################################################################
 ## Monoculture samples (Human only)
 ################################################################################
-files <- glue("{base_dir}/data/{c('1LP', '2LP', '8LP', '9LP', 'EP1NSmono', 'EP1NSminusTTXHuman', 'MCplusTTX')}")
+files <- glue("{base_dir}/data/{c('1LP', '2LP', '8LP', '9LP')}")
 fnames <- basename(files)
 
 metrics <- NULL
@@ -96,7 +96,7 @@ ggsave(glue('{base_dir}/output/HumanOnly-tdTomato.png'), width = 15, height = 12
 ################################################################################
 ## Human+Rat samples
 ################################################################################
-files <- glue("{base_dir}/data/{c('3LP', 'BT2214rat', 'EP1NSrat', 'VBT242rat', 'BT2214Rat', 'EP1NSminusTTXRat', 'EP1NSplusTTXRat')}")
+files <- glue("{base_dir}/data/{c('BT165rat', 'EP1NSrat', 'VBT242rat')}")
 fnames <- basename(files)
 
 metrics <- NULL
