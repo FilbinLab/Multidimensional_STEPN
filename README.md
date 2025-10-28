@@ -31,7 +31,7 @@ Code to display oncoprint of Fig 1 is also in this folder (`Oncoprint.R`)
 Codes to plot most figures for ST-EPN patient samples
 
 ## 3. Pseudobulk analysis 
-Codes to plot developmental projections of Fig 1f and Extended Data Fig 2a-b. To prepare the reference datasets, the codes stored in the folder `Developmental_dataset_processing` are used.
+Codes to plot Extended Data Fig 3 and developmental projections of Fig 1f and Extended Data Fig 2a-b. To prepare the reference datasets, the codes stored in the folder `Developmental_dataset_processing` are used.
 
 ## 4. 10X Xenium
 
