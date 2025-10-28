@@ -4,7 +4,7 @@ Code repository for single-cell multidimensional profiling of supratentorial epe
 
 Raw data for scRNAseq and 10X Xenium are deposited on gene expression omnibus (GEO) under accession number GSE260452, and processed data depository is pending. 
 
-Contact: daeun_jeong at dfci.harvard.edu, sara.g.danielli@gmail.com, carlosa_biagijunior at dfci.harvard.edu
+Contact: daeun_jeong at dfci.harvard.edu, sara.g.danielli at gmail.com, carlosa_biagijunior at dfci.harvard.edu
 
 # Overview
 0. Software version requirements 
