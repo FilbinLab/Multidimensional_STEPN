@@ -1,0 +1,539 @@
+
+---
+title: "Coculture - rat cell types"
+output: html_document
+author: "Daeun Jeong" 
+date: "2025-05-01"
+---
+
+```{r, setup, include = FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = TRUE, cache = TRUE, warning = FALSE, comment = FALSE)
+```
+
+```{r preparation environment, message=FALSE, warning=FALSE}
+# Load packages -----------------------------------
+library(dplyr)
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(SeuratObject)
+library(data.table)
+library(tidyverse)
+library(ggpubr)
+library(cowplot)
+library(ggrastr)
+library(qs)
+
+# Organize environment  -----------------------------------
+base_dir <- "/home/dj83/MANUSCRIPT/9-scRNAseq_coculture"
+data_dir <- file.path(base_dir,"data")
+analysis_dir <- file.path(base_dir, 'analysis')
+resource_dir <- file.path(base_dir, 'scripts/resources')
+plot_dir <- file.path(base_dir,"plots")
+source(file.path(resource_dir, 'Plot_style_v2.R'))
+source(file.path(resource_dir, 'single_cell_preprocessing_helper_functions_CBJr.R'))
+source(file.path(resource_dir, 'NMF_helper_function.R'))
+```
+
+```{r}
+# Define color palettes  -----------------------------------
+
+colors_species <- c("#1BB6AFFF","#F99E93FF")
+names(colors_species) <- c("Rat","Human")
+
+
+colors_cell_type <- c('#ab1f8f','#3daba4','#C3E6B5', '#ffe1f8' ,'#e3c348','#c7ae5f','#088BBEFF','#244192', '#B5632B','#ae5b59','#abc078','#ae9faf')
+names(colors_cell_type) <-c("NPCs","Immature_neurons","Excitatory_neurons","Inhibitory_neurons","Astrocytes","Reactive_astrocytes","OPCs","Oligodendrocytes","Fibroblasts","Pericytes","T_cells","Microglia")
+
+
+
+colors_sample_merged <- c('#cacaca','#B5B991FF', '#EA7580FF' ,'#F6A1A5FF' ,'#F8CD9CFF', '#1BB6AFFF', '#088BBEFF' ,'#172869FF','#e57b64','#4577d0','#dd36c1','#36dd99','#dd9636')
+names(colors_sample_merged) <- c("Patient","EP1NS_Monoculture_adh","EP1NS_Monoculture_sph","EP1NS_Coculture_rats","EP1NS_PDX","BT165_Monoculture_adh","BT165_Monoculture_sph","BT165_Coculture_rats","BT165_PDX","VBT242_Monoculture_adh","VBT242_Monoculture_sph","VBT242_Coculture_rats","VBT242_PDX")
+
+
+colors_cell_type_merged <- c('#EA7580FF','#EA7580FF','#EA7580FF','#ab1f8f','#088BBEFF','#23bfc4','#9599d2','#2a37ac','#ffe1f8','#a5ac40','#d696be','#e3c348','#B5632B')
+names(colors_cell_type_merged) <-c("EP1NS-tdT","BT165-tdT","VBT242-tdT","Radial_glia","NPCs","Immature_neurons","Immature_excitatory_neurons","Excitatory_neurons","Inhibitory_neurons","OPCs","Astrocytes","Microglia","Endothelial")
+                                  
+
+colors_cell_type_merged <- c('#EA7580FF','#C3E6B5', '#ffe1f8' ,'#e3c348','#088BBEFF','#244192', '#B5632B')
+names(colors_cell_type_merged) <- c('EP1NS-tdT',"Excitatory_neurons","Inhibitory_neurons","Astrocytes","OPCs","Oligodendrocytes","Fibroblasts")
+
+colors_cell_type_subset <- c('#C3E6B5', '#ffe1f8' ,'#e3c348')
+names(colors_cell_type_subset) <- c("Excitatory_neurons","Inhibitory_neurons","Astrocytes")
+
+```
+
+
+```{r}
+
+# load Seurat object -----------------------------------
+
+seurat_dir = "/home/dj83/data/patient_models/"
+
+BT165rat = qread(paste0(seurat_dir,"SeuratObject-BT165rat.qs"))
+EP1NSrat = qread(paste0(seurat_dir,"SeuratObject-EP1NSrat.qs"))
+VBT242rat = qread(paste0(seurat_dir,"SeuratObject-VBT242rat.qs"))
+
+obj <- merge(BT165rat,EP1NSrat)
+obj <- merge(obj,VBT242rat)
+obj <- JoinLayers(obj)
+
+```
+
+
+```{r}
+
+#Separate out human & rat data  -----------------------------------
+
+data_Human <- subset(obj, species == "Human")
+data_Human <- subset(data_Human, features = grep("^GRCh38----", rownames(data_Human), value = TRUE))
+rownames(data_Human) <- gsub("GRCh38----", "", rownames(data_Human))
+data_Human <- subset(data_Human, features = grep("^ENSG", rownames(data_Human), value = TRUE, invert = T))
+data_Human$orig.ident = gsub("3LP","BT165rat",data_Human$orig.ident)
+
+data_Rat <- subset(obj, species == "Rat")
+data_Rat <- subset(data_Rat, features = grep("^mRatBN7-2-|tdTomato", rownames(data_Rat), value = TRUE))
+rownames(data_Rat) <- gsub("mRatBN7-2-|GRCh38----", "", rownames(data_Rat))
+data_Rat <- subset(data_Rat, features = grep("^ENSRNOG", rownames(data_Rat), value = TRUE, invert = T))
+
+```
+
+
+```{r}
+
+#Run Full Seurat on Rat data  -----------------------------------
+
+metadata <- data_Rat@meta.data
+
+cm <- data_Rat[["RNA"]]$counts
+cm_norm <- as.matrix(log2(cm/10+1))
+cm_mean <- log2(Matrix::rowMeans(cm)+1)
+cm_center <- cm_norm - rowMeans(cm_norm)
+
+RunFullSeurat_v5 <- function(cm, metadata, do.scale = FALSE, do.center = TRUE, doBatch = F, var2batch = NULL, batchMethod = 'harmony', resolution = 0.5, dims = 10, pca_dims = 100, n.neighbors = 30, tsne_perplexity = 30, project, norm.type = 'RNA', verbose = TRUE){
+  #seurat_obj <- preprocessSeuratObject_v5(cm, project = project, min.cells = 0, min.genes = 0, scale.factor = 1E5, do.scale = do.scale, do.center = do.center, norm.type = norm.type, mt.pattern = mt.pattern, verbose = verbose)
+  seurat_obj <- preprocessSeuratObject_v5(cm, project = project, min.cells = 0, min.genes = 3, scale.factor = 1E5, do.scale = do.scale, do.center = do.center, norm.type = norm.type, verbose = verbose)
+  
+  if (is.data.frame(metadata) | is.matrix(metadata)) {
+    seurat_obj <- AddMetaData(seurat_obj, metadata)
+  } else if (is.vector(metadata)) {
+    seurat_obj <- AddMetaData(seurat_obj, metadata, col.name = 'sample')
+  }
+  
+  if (norm.type == 'RNA') {
+    seurat_obj <- RunPCA(object = seurat_obj, features = VariableFeatures(seurat_obj), npcs = pca_dims, ndims.print  = 1:5, nfeatures.print = 5, verbose = verbose)
+    if (dims <= 1) {
+      dims <- optimizePCA(seurat_obj, dims)
+      #message("Using ", dims, " PCs as optimal number!")
+    }
+  }
+  
+  if (doBatch){
+    seurat_obj[["RNA"]] <- split(seurat_obj[["RNA"]], f = seurat_obj@meta.data %>% pull(var2batch))
+    
+    if (norm.type == 'RNA') {
+      seurat_obj <- suppressWarnings(NormalizeData(seurat_obj, verbose = verbose)) %>%
+        FindVariableFeatures(verbose = verbose) %>%
+        ScaleData(verbose = verbose) %>%
+        RunPCA(npcs = pca_dims, verbose = verbose) %>%
+        FindNeighbors(dims = 1:dims, reduction = "pca", verbose = verbose) %>%
+        FindClusters(resolution = resolution, cluster.name = "unintegrated_clusters", verbose = verbose) %>%
+        RunUMAP(dims = 1:dims, reduction = "pca", reduction.name = "umap.unintegrated", min.dist = 0.8, verbose = verbose, return.model = TRUE) %>%
+        RunTSNE(dims = 1:dims, reduction = "pca", reduction.name = "tsne.unintegrated", num_threads = 8, perplexity = tsne_perplexity, check_duplicates = F, verbose = verbose)
+    } else if (norm.type == 'SCT') {
+      seurat_obj <- SCTransform(seurat_obj, vst.flavor = "v2", method = "glmGamPoi", verbose = verbose)
+      seurat_obj <- RunPCA(seurat_obj, npcs = pca_dims, verbose = verbose)
+      if (dims <= 1) {dims <- optimizePCA(seurat_obj, dims)}
+      seurat_obj <- seurat_obj %>%
+        FindNeighbors(reduction = "pca", dims = 1:dims, verbose = verbose) %>%
+        FindClusters(resolution = resolution, cluster.name = "unintegrated_clusters", verbose = verbose) %>%
+        RunUMAP(reduction = "pca", dims = 1:dims, reduction.name = "umap.unintegrated", min.dist = 0.8, return.model = TRUE, verbose = verbose) %>%
+        RunTSNE(dims = 1:dims, reduction = "pca", reduction.name = "tsne.unintegrated", num_threads = 8, perplexity = tsne_perplexity, check_duplicates = F, verbose = verbose)
+    }
+    
+    if (batchMethod != 'all') {
+      message(glue("Performing batch correction using {batchMethod}"))
+      met <- switch(batchMethod, cca = CCAIntegration, rpca = RPCAIntegration, harmony = HarmonyIntegration, mnn = FastMNNIntegration, NA)
+      reduc <- switch(batchMethod, cca = 'integrated.cca', rpca = 'integrated.rpca', harmony = 'harmony', mnn = 'integrated.mnn', NA)
+      
+      #if (sum(seurat_obj@meta.data %>% group_by_at(var2batch) %>% summarise(n = n()) %>% arrange(n) %>% pull(n) < 200) > 0 & batchMethod %in% c('cca', 'rpca')) {
+      #  seurat_obj <- IntegrateLayers(object = seurat_obj, method = met, orig.reduction = "pca", new.reduction = reduc, verbose = verbose, k.anchor = 10)
+      #} else {
+      #  seurat_obj <- IntegrateLayers(object = seurat_obj, method = met, orig.reduction = "pca", new.reduction = reduc, verbose = verbose)
+      #}
+      
+      seurat_obj <- IntegrateLayers(object = seurat_obj, method = met, orig.reduction = "pca", new.reduction = reduc, verbose = verbose)
+      seurat_obj <- seurat_obj %>%
+        FindNeighbors(reduction = reduc, dims = 1:dims, verbose = verbose) %>%
+        FindClusters(resolution = resolution, cluster.name = glue("{batchMethod}_clusters"), verbose = verbose) %>%
+        RunUMAP(reduction = reduc, dims = 1:dims, reduction.name = glue("umap.{batchMethod}"), min.dist = 0.8, verbose = verbose, return.model = TRUE) %>%
+        RunTSNE(reduction = reduc, dims = 1:dims, reduction.name = glue("tsne.{batchMethod}"), num_threads = 8, perplexity = tsne_perplexity, check_duplicates = F, verbose = verbose)
+    } else if (batchMethod == 'all') {
+      integration_methods <- c('cca', 'rpca', 'harmony', 'mnn')
+      for (intMet in integration_methods) {
+        message(glue("Performing batch correction using {intMet}"))
+        met <- switch(intMet, cca = CCAIntegration, rpca = RPCAIntegration, harmony = HarmonyIntegration, mnn = FastMNNIntegration, NA)
+        reduc <- switch(intMet, cca = 'integrated.cca', rpca = 'integrated.rpca', harmony = 'harmony', mnn = 'integrated.mnn', NA)
+        
+        #if (sum(seurat_obj@meta.data %>% group_by_at(var2batch) %>% summarise(n = n()) %>% arrange(n) %>% pull(n) < 200) > 0 & intMet %in% c('cca', 'rpca')) {
+        #  seurat_obj <- IntegrateLayers(object = seurat_obj, method = met, orig.reduction = "pca", new.reduction = reduc, verbose = verbose, k.anchor = 10)
+        #} else {
+        #  seurat_obj <- IntegrateLayers(object = seurat_obj, method = met, orig.reduction = "pca", new.reduction = reduc, verbose = verbose)
+        #}
+        
+        seurat_obj <- IntegrateLayers(object = seurat_obj, method = met, orig.reduction = "pca", new.reduction = reduc, verbose = verbose)
+        seurat_obj <- seurat_obj %>%
+          FindNeighbors(reduction = reduc, dims = 1:dims, verbose = verbose) %>%
+          FindClusters(resolution = resolution, cluster.name = glue("{intMet}_clusters"), verbose = verbose) %>%
+          RunUMAP(reduction = reduc, dims = 1:dims, reduction.name = glue("umap.{intMet}"), min.dist = 0.8, verbose = verbose, return.model = TRUE) %>%
+          RunTSNE(reduction = reduc, dims = 1:dims, reduction.name = glue("tsne.{intMet}"), num_threads = 8, perplexity = tsne_perplexity, check_duplicates = F, verbose = verbose)
+      }
+    }
+    if (norm.type == 'RNA') {
+      seurat_obj <- JoinLayers(seurat_obj)
+    } else if (norm.type == 'SCT') {
+      seurat_obj <- PrepSCTFindMarkers(seurat_obj, verbose = verbose)
+    }
+  } else {
+    if (norm.type == 'RNA') {
+      seurat_obj <- seurat_obj %>%
+        FindNeighbors(reduction = 'pca', dims = 1:dims, verbose = verbose) %>%
+        FindClusters(resolution = resolution, verbose = verbose) %>%
+        RunUMAP(reduction = 'pca', dims = 1:dims, n.neighbors = n.neighbors, min.dist = 0.8, verbose = verbose, return.model = TRUE) %>%
+        RunTSNE(reduction = 'pca', dims = 1:dims, num_threads = 8, perplexity = tsne_perplexity, check_duplicates = F, verbose = verbose)
+    } else if (norm.type == 'SCT') {
+      seurat_obj <- SCTransform(seurat_obj, vst.flavor = "v2", method = "glmGamPoi", verbose = verbose)
+      seurat_obj <- RunPCA(seurat_obj, npcs = pca_dims, verbose = verbose)
+      if (dims <= 1) {dims <- optimizePCA(seurat_obj, dims)}
+      seurat_obj <- seurat_obj %>%
+        FindNeighbors(reduction = "pca", dims = 1:dims, verbose = verbose) %>%
+        FindClusters(resolution = resolution, verbose = verbose) %>%
+        RunUMAP(reduction = "pca", dims = 1:dims, min.dist = 0.8, return.model = TRUE, verbose = verbose) %>%
+        RunTSNE(reduction = 'pca', dims = 1:dims, num_threads = 8, perplexity = tsne_perplexity, check_duplicates = F, verbose = verbose)
+    }
+  }
+  return(seurat_obj)
+}
+
+
+
+new_obj <- RunFullSeurat_v5(cm = cm, metadata = metadata,  doBatch = F, project = 'data_Rat')
+seurat_obj = new_obj
+
+seurat_obj$orig.ident = gsub("3LP","BT165rat",seurat_obj$orig.ident)
+
+```
+
+
+```{r}
+DimPlot(object = seurat_obj, 
+        reduction = 'umap', 
+        group.by = "seurat_clusters", 
+        pt.size = 0.4, 
+        shuffle = TRUE, 
+        label = TRUE,
+        label.size = 3
+        )  
+```
+
+
+```{r}
+# markers for seurat clusters  -----------------------------------
+
+Idents(seurat_obj) = "seurat_clusters"
+
+## Identify markers
+markers <- RunPrestoAll(seurat_obj, 
+                        only.pos = T, 
+                        densify = T, 
+                        max.cells.per.ident = 500,
+                        logfc.threshold = 0.25,
+                        min.pct = 0.15
+)  %>%
+  filter(p_val_adj < 0.05) %>%
+  group_by(cluster) %>%
+  arrange(-avg_log2FC, .by_group = T)
+
+top.markers <- markers %>% group_by(cluster) %>% top_n(50, wt = avg_log2FC)
+
+write.csv(top.markers,paste0(plot_dir,"/all_cocultures_top.markers.csv"))
+```
+
+
+
+```{r}
+# Annotate seurat clusters  -----------------------------------
+
+#0 = Inhibitory Neurons 
+#1 = Excitatory neurons 
+#2 = Fibroblasts
+#3 = Astrocytes 
+#4 = NG2-Glia/OPCs
+#5 = Fibroblasts
+#6 = Excitatory neurons 
+#7 = Oligodendrocytes
+
+seurat_obj$cell_type = seurat_obj$seurat_clusters
+seurat_obj$cell_type = gsub("0","Inhibitory_neurons",seurat_obj$cell_type)
+seurat_obj$cell_type = gsub("1","Excitatory_neurons",seurat_obj$cell_type)
+seurat_obj$cell_type = gsub("2","Fibroblasts",seurat_obj$cell_type)
+seurat_obj$cell_type = gsub("3","Astrocytes",seurat_obj$cell_type)
+seurat_obj$cell_type = gsub("4","OPCs",seurat_obj$cell_type)
+seurat_obj$cell_type = gsub("5","Fibroblasts",seurat_obj$cell_type)
+seurat_obj$cell_type = gsub("6","Excitatory_neurons",seurat_obj$cell_type)
+seurat_obj$cell_type = gsub("7","Oligodendrocytes",seurat_obj$cell_type)
+```
+
+
+```{r}
+
+DimPlot(object = seurat_obj, 
+        reduction = 'umap', 
+        group.by = "cell_type", 
+        pt.size = 0.4, 
+        shuffle = TRUE, 
+        label = TRUE,
+        label.size = 3,
+        cols=colors_cell_type
+        )  
+
+ggsave(file.path(plot_dir, "UMAP_all_coculture_ratonly.pdf"), width=6, height=4)
+
+```
+
+
+
+```{r barplot}
+# Barplot of cell types  -----------------------------------
+
+seurat_obj$cell_type = factor(seurat_obj$cell_type,levels=c("NPCs","Immature_neurons","Excitatory_neurons","Inhibitory_neurons","Astrocytes","Reactive_astrocytes","OPCs","Oligodendrocytes","Fibroblasts","Pericytes","T_cells","Microglia"))
+
+
+plot_bar(seurat_obj, seurat_obj$species, seurat_obj$cell_type, col = colors_cell_type) 
+ggsave(file.path(plot_dir, "Barplot_all_coculture_ratonly.pdf"), width=4, height=4)
+
+```
+
+
+```{r}
+# Number of cell types  -----------------------------------
+
+seurat_obj@meta.data %>%
+  group_by(cell_type) %>%
+  summarise(n=n()) 
+```
+
+
+
+```{r}
+# Merge rat cell types with tumor cells  -----------------------------------
+
+data_Human$cell_type = "Tumor-tdT"
+
+new_obj = merge(data_Rat,data_Human)
+new_obj = JoinLayers(new_obj)
+
+metadata <- new_obj@meta.data
+
+cm <- new_obj[["RNA"]]$counts
+cm_norm <- as.matrix(log2(cm/10+1))
+cm_mean <- log2(Matrix::rowMeans(cm)+1)
+cm_center <- cm_norm - rowMeans(cm_norm)
+
+new_obj <- RunFullSeurat_v5(cm = cm, metadata = metadata,  doBatch = F, project = 'tumor_Rat')
+new_obj$orig.ident = gsub("3LP","BT165rat",new_obj$orig.ident)
+
+```
+
+
+```{r}
+
+p1 <- DimPlot(object = new_obj, 
+        reduction = 'umap', 
+        group.by = "orig.ident", 
+        pt.size = 0.4, 
+        shuffle = TRUE, 
+        label = TRUE,
+        label.size = 3
+        )
+
+p2 <- DimPlot(object = new_obj, 
+        reduction = 'umap', 
+        group.by = "seurat_clusters", 
+        pt.size = 0.4, 
+        shuffle = TRUE, 
+        label = TRUE,
+        label.size = 3
+        )
+
+p1+p2
+```
+
+
+
+
+```{r}
+# markers for seurat clusters  -----------------------------------
+
+Idents(new_obj) = "seurat_clusters"
+# Identify markers
+markers <- RunPrestoAll(new_obj, 
+                        only.pos = T, 
+                        densify = T, 
+                        max.cells.per.ident = 500,
+                        logfc.threshold = 0.15,
+                        min.pct = 0.15
+)  %>%
+  filter(p_val_adj < 0.05) %>%
+  group_by(cluster) %>%
+  arrange(-avg_log2FC, .by_group = T)
+
+top.markers <- markers %>% group_by(cluster) %>% top_n(50, wt = avg_log2FC)
+
+write.csv(top.markers,paste0(plot_dir,"/all_cocultures_Tumorincluded_top.markers.csv"))
+
+```
+
+
+```{r}
+# Re-annotate seurat clusters  -----------------------------------
+
+new_obj$annotation = new_obj$seurat_clusters
+
+new_obj$annotation = gsub("0","NPCs",new_obj$annotation)
+new_obj$annotation = gsub("1","Radial_glia",new_obj$annotation)
+new_obj$annotation = gsub("2","Excitatory_neurons",new_obj$annotation)
+new_obj$annotation = gsub("3","Immature_excitatory_neurons",new_obj$annotation)
+new_obj$annotation = gsub("4","Immature_neurons",new_obj$annotation)
+new_obj$annotation = gsub("5","OPCs",new_obj$annotation)
+new_obj$annotation = gsub("6","Endothelial",new_obj$annotation)
+
+new_obj$annotation = gsub("7","BTonesixfive_VBTtwofourtwo",new_obj$annotation)
+new_obj$annotation = gsub("8","Astrocytes",new_obj$annotation)
+new_obj$annotation = gsub("9","Inhibitory_neurons",new_obj$annotation)
+
+new_obj$annotation = gsub("10","Radial_glia",new_obj$annotation)
+new_obj$annotation = gsub("11","Microglia",new_obj$annotation)
+new_obj$annotation = gsub("12","Mitochondrial",new_obj$annotation)
+new_obj$annotation = gsub("13","EPoneNS-tdT",new_obj$annotation)
+new_obj$annotation = gsub("14","Immature_neurons",new_obj$annotation)
+new_obj$annotation = gsub("EPoneNS-tdT","EP1NS-tdT",new_obj$annotation)
+
+
+Idents(new_obj) = "annotation"
+new_obj = subset(new_obj,idents="Mitochondrial",invert=TRUE)
+```
+
+
+
+```{r}
+# Dimplots  -----------------------------------
+
+p1 <- DimPlot(object = new_obj, 
+        reduction = 'umap', 
+        group.by = "seurat_clusters", 
+        pt.size = 0.4, 
+        shuffle = TRUE, 
+        label = TRUE,
+        label.size = 3
+        )
+
+p2 <- DimPlot(object = new_obj, 
+        reduction = 'umap', 
+        group.by = "annotation", 
+        pt.size = 0.4, 
+        shuffle = TRUE, 
+        label = TRUE,
+        label.size = 3
+        )
+
+p1+p2
+
+
+new_obj$annotation = factor(new_obj$annotation,levels=c("EP1NS-tdT","BT165-tdT","VBT242-tdT","Radial_glia","NPCs","Immature_neurons","Immature_excitatory_neurons","Excitatory_neurons","Inhibitory_neurons","OPCs","Astrocytes","Microglia","Endothelial"))
+
+DimPlot(object = new_obj, 
+        reduction = 'umap', 
+        group.by = "annotation", 
+        pt.size = 0.4, 
+        shuffle = TRUE, 
+        label = TRUE,
+        label.size = 0,
+        cols=colors_cell_type_merged
+        )
+
+ggsave(file.path(plot_dir, "DimPlot_allTumorCoculture_celltype.pdf"), width=8, height=5)
+
+qsave(new_obj,file.path(data_dir,"cocultures_merged.qs"))
+```
+
+
+```{r}
+Idents(new_obj) = "species"
+rat_only = subset(new_obj,idents="Rat")
+```
+
+
+
+```{r barplot singleR, fig.width = 5, fig.height = 4, fig.align="center"}
+## Bar plot
+plot_bar(rat_only, rat_only$species, rat_only$annotation, col = colors_cell_type_merged) 
+ggsave(file.path(plot_dir, "Barplot_cocultures_merged_celltype.pdf"), width=5, height=4)
+
+## Bar plot
+plot_bar(new_obj, new_obj$species, new_obj$annotation, col = colors_cell_type_merged) 
+ggsave(file.path(plot_dir, "Barplot_cocultures_merged_tumorincluded_celltype.pdf"), width=5, height=4)
+```
+
+
+```{r}
+
+DimPlot(object = new_obj, 
+        reduction = 'umap', 
+        group.by = "species", 
+        pt.size = 0.4, 
+        shuffle = TRUE, 
+        label = TRUE,
+        label.size = 0,
+        cols=colors_species
+        )
+
+ggsave(file.path(plot_dir, "DimPlot_EP1NSrat_species.pdf"), width=4.5, height=3.5)
+```
+
+
+
+
+```{r}
+rat_only@meta.data %>%
+  group_by(annotation) %>%
+  summarise(n=n()) %>%
+  mutate(rel.freq = paste0(round(100 * n/sum(n), 0), "%"))
+
+#out of 13520 cells total 
+```
+
+
+
+```{r}
+new_obj@meta.data %>%
+  group_by(species) %>%
+  summarise(n=n()) %>%
+  mutate(rel.freq = paste0(round(100 * n/sum(n), 0), "%"))
+
+#out of 13520 cells total 
+```
+
+
+
+
+
+
+
+
+
+
+
+

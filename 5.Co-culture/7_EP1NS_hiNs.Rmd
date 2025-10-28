@@ -1,0 +1,624 @@
+---
+title: "EP1NS_hiNs"
+output: html_document
+author: "Daeun Jeong" 
+date: "2025-7-15"
+---
+
+```{r preparation environment, message=FALSE, warning=FALSE}
+# Load packages -----------------------------------
+library(dplyr)
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(SeuratObject)
+library(data.table)
+library(tidyverse)
+library(ggpubr)
+library(cowplot)
+library(ggrastr)
+library(qs)
+#library(speckle)
+library(qs)
+library(SeuratWrappers)
+
+# Organize environment  -----------------------------------
+base_dir <- "/home/dj83/MANUSCRIPT/9-scRNAseq_coculture"
+data_dir <- file.path(base_dir,"data")
+analysis_dir <- file.path(base_dir, 'analysis')
+resource_dir <- file.path(base_dir, 'scripts/resources')
+plot_dir <- file.path(base_dir,"plots/EP1NS_Coculture_hiNs")
+seurat_dir <- "/home/dj83/data/patient_models/"
+source(file.path(resource_dir, 'Plot_style_v2.R'))
+source(file.path(resource_dir, 'NMF_helper_function.R'))
+```
+
+
+```{r}
+# Define color palettes  -----------------------------------
+colors_tumor <- c("#1BB6AFFF","#F99E93FF")
+names(colors_tumor) <- c("normal","tumor")
+
+colors_sample_merged <- c('#cacaca','#B5B991FF', '#EA7580FF' ,'#F6A1A5FF' ,'#F8CD9CFF', '#1BB6AFFF', '#088BBEFF' ,'#172869FF','#e57b64','#4577d0','#dd36c1','#36dd99','#dd9636')
+names(colors_sample_merged) <- c("Patient","EP1NS_Monoculture_adh","EP1NS_Monoculture_sph","EP1NS_Coculture_rats","EP1NS_PDX","BT165_Monoculture_adh","BT165_Monoculture_sph","BT165_Coculture_rats","BT165_PDX","VBT242_Monoculture_adh","VBT242_Monoculture_sph","VBT242_Coculture_rats","VBT242_PDX")
+
+colors_sample = c("blue","red")
+names(colors_sample) =  c("2LP","12LP")
+
+colors_cell_type = c('#EA7580FF','#63a7ff','#dd9636')
+names(colors_cell_type) =  c("EP1NS-tdT","Excitatory_neurons","Astrocytes")
+
+
+colors_EP1NS <- c('#453947FF','red')
+names(colors_EP1NS) <- c("_Monoculture","Coculture_hiNs")
+
+colors_EP1NS_merged <- c('#cacaca','#453947FF','red')
+names(colors_EP1NS_merged) <- c("Patient","Monoculture","Coculture_hiNs")
+
+colors_tdTomato <- c('red','grey90')
+names(colors_tdTomato) <- c("yes","no")
+
+```
+
+
+
+```{r}
+# Load objects  -----------------------------------
+
+patients = qread(paste0("/home/dj83/data/seurat_objects/seurat_obj_malignant_annotated2.qs"))
+cc <- qread("/n/scratch/users/c/cao385/Ependymoma/10x/output/2LP-post-inferCNV-latest.qs")
+mc <- qread("/n/scratch/users/c/cao385/Ependymoma/10x/output/12LP-post-inferCNV.qs")
+
+models = qread(file.path(data_dir,"patient_models_merged.qs"))
+
+```
+
+
+
+```{r}
+# Dimplot of malignant & non-malignant  -----------------------------------
+
+p1 <- DimPlot(object = cc, 
+        reduction = 'umap', 
+        group.by = "tumor", 
+        pt.size = 0.4, 
+        shuffle = TRUE, 
+        label = TRUE,
+        label.size = 0,
+        cols=colors_tumor
+        )
+
+p2 <- DimPlot(object = cc, 
+        reduction = 'umap', 
+        group.by = "tdTomato", 
+        pt.size = 0.4, 
+        shuffle = TRUE, 
+        label = TRUE,
+        label.size = 0,
+        cols=colors_tdTomato
+        )
+p1+p2
+ggsave(file.path(plot_dir,"EP1NS_hiNs_tumorstat_tdTomato.pdf"),width=10,height=4)
+
+qsave(cc,file.path(data_dir,"EP1NS_hiNs_inferCNV-latest.qs"))
+
+p3 <- DimPlot(object = cc, 
+        reduction = 'umap', 
+        group.by = "seurat_clusters", 
+        pt.size = 0.4, 
+        shuffle = TRUE, 
+        label = TRUE,
+        label.size = 4
+        )
+
+```
+
+
+```{r}
+# Derive markers seurat clusters  -----------------------------------
+
+Idents(cc) = "seurat_clusters"
+# Identify markers
+markers <- RunPrestoAll(cc, 
+                        only.pos = T, 
+                        densify = T, 
+                        max.cells.per.ident = 500,
+                        logfc.threshold = 0.25,
+                        min.pct = 0.15
+)  %>%
+  filter(p_val_adj < 0.05) %>%
+  group_by(cluster) %>%
+  arrange(-avg_log2FC, .by_group = T)
+
+top.markers <- markers %>% group_by(cluster) %>% top_n(10, wt = avg_log2FC)
+
+```
+
+
+```{r}
+# Annotate seurat clusters  -----------------------------------
+
+cc$cell_types = cc$seurat_clusters
+cc$cell_types = gsub("7","Excitatory_neurons",cc$cell_types)
+cc$cell_types = gsub("8","Excitatory_neurons",cc$cell_types)
+cc$cell_types = gsub("9","Excitatory_neurons",cc$cell_types)
+cc$cell_types = gsub("13","Astrocytes",cc$cell_types)
+
+cc$cell_types = gsub("0","EP1NS-tdT",cc$cell_types)
+cc$cell_types = gsub("1","EP1NS-tdT",cc$cell_types)
+cc$cell_types = gsub("2","EP1NS-tdT",cc$cell_types)
+cc$cell_types = gsub("3","EP1NS-tdT",cc$cell_types)
+cc$cell_types = gsub("4","EP1NS-tdT",cc$cell_types)
+cc$cell_types = gsub("5","EP1NS-tdT",cc$cell_types)
+cc$cell_types = gsub("6","EP1NS-tdT",cc$cell_types)
+cc$cell_types = gsub("10","EP1NS-tdT",cc$cell_types)
+cc$cell_types = gsub("11","EP1NS-tdT",cc$cell_types)
+cc$cell_types = gsub("12","EP1NS-tdT",cc$cell_types)
+
+```
+
+
+```{r}
+# Proportion of non-malignant cell types -----------------------------------
+
+Idents(cc) ="cell_types"
+normal_obj = subset(cc,idents="EP1NS-tdT",invert=TRUE)
+
+ggplot(normal_obj@meta.data, aes(orig.ident, fill = cell_types)) +
+    scale_fill_manual(values = colors_cell_type) + 
+    geom_bar(position = "fill", color="black") +
+    labs (y='Proportion', x='') + 
+    theme(panel.border = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_blank(),
+          panel.background = element_blank(),
+          axis.line = element_line(colour = "black"),
+          axis.text.x = element_text(size=14, angle = 90, vjust = 0.5, hjust=1, colour="black"),
+          axis.text.y = element_text(size=14, colour="black"),
+          axis.title=element_text(size=14),
+          legend.text = element_text(size = 14),
+          legend.title = element_blank()) 
+
+ggsave(file.path(plot_dir,"EP1NS_hiNs_normal_cells_prop.pdf"),width=4,height=4)
+```
+
+
+```{r}
+# Number of non-malignant cells -----------------------------------
+
+normal_obj@meta.data %>%
+  group_by(cell_types) %>%
+  summarise(n=n()) %>%
+  mutate(prop = n / sum(n))
+```
+
+
+
+```{r}
+# Proportion of malignant & non-malignant cell types -----------------------------------
+
+Idents(cc) ="cell_types"
+ggplot(cc@meta.data, aes(orig.ident, fill = cell_types)) +
+    scale_fill_manual(values = colors_cell_type) + 
+    geom_bar(position = "fill", color="black") +
+    labs (y='Proportion', x='') + 
+    theme(panel.border = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_blank(),
+          panel.background = element_blank(),
+          axis.line = element_line(colour = "black"),
+          axis.text.x = element_text(size=14, angle = 90, vjust = 0.5, hjust=1, colour="black"),
+          axis.text.y = element_text(size=14, colour="black"),
+          axis.title=element_text(size=14),
+          legend.text = element_text(size = 14),
+          legend.title = element_blank()) 
+
+ggsave(file.path(plot_dir,"EP1NS_hiNs_all_cells_prop.pdf"),width=5.5,height=4)
+```
+
+
+```{r}
+# Number of malignant & non-malignant cell types -----------------------------------
+cc@meta.data %>%
+  group_by(cell_types) %>%
+  summarise(n=n()) %>%
+  mutate(prop = n / sum(n))
+```
+
+
+```{r}
+# Dotplot of marker genes -----------------------------------
+
+cc$cell_types<- factor(cc$cell_types, levels = rev(c("EP1NS-tdT","Excitatory_neurons","Astrocytes")))
+DotPlot(cc,group.by="cell_types",features=c("SCN9A","PRKG1","RBFOX1","COL3A1","GFAP","AQP4"))+ scale_colour_gradient2(low = "darkblue", mid = "white", high = "brown2")+ theme(axis.text.x = element_text(angle = 45, hjust=1))
+ggsave(file.path(plot_dir,"EP1NS_hiNs_markers.pdf"),width=5.5,height=4)
+```
+
+
+
+```{r}
+# Subset out EP1NS-hiNs cocultured malignant cells -----------------------------------
+
+Idents(cc) = "cell_types"
+malig_obj = subset(cc,idents="EP1NS-tdT")
+
+Idents(malig_obj) = "tumor"
+malig_obj = subset(malig_obj,idents="tumor")
+malig_obj$model = "Coculture_hiNs"
+```
+
+
+```{r}
+# Merge EP1NS monoculture and hiNs coculture  -----------------------------------
+
+Idents(models) = 'sample'
+models = subset(models,idents=c("EP1NS_Monoculture_adh","EP1NS_Monoculture_sph"))
+models$model = "Monoculture"
+
+obj = merge(malig_obj,models)
+obj = JoinLayers(obj)
+
+## process with Full Seurat 
+metadata <- obj@meta.data
+
+cm <- obj[["RNA"]]$counts
+cm_norm <- as.matrix(log2(cm/10+1))
+cm_mean <- log2(Matrix::rowMeans(cm)+1)
+cm_center <- cm_norm - rowMeans(cm_norm)
+
+seurat_obj <- RunFullSeurat_v5(cm = cm, metadata = metadata,  doBatch = F, project = 'EPNcoculture')
+
+seurat_obj$model <- factor(seurat_obj$model,levels=c("Monoculture","Coculture_hiNs"))
+```
+
+
+```{r}
+# Score EP1NS monoculture + hiNs coculture by ST-EPN MP signatures -----------------------------------
+
+## load NMF gene list 
+markers_NMF = read.csv(file.path(base_dir,"TableS4_NMF_genes.csv"),header=TRUE)
+colnames(markers_NMF) = markers_NMF[1,]
+markers_NMF = markers_NMF[2:31,]
+markers_NMF = as.list(markers_NMF)
+names(markers_NMF) =gsub("MES/Hypoxia","MES_Hypoxia",names(markers_NMF))
+
+## score tumors
+seurat_obj <- AddModuleScore(object = seurat_obj, assay = 'RNA', features = markers_NMF, name = names(markers_NMF))
+
+col_start <- length(colnames(seurat_obj@meta.data)) - length(names(markers_NMF)) +1
+col_end <- length(colnames(seurat_obj@meta.data))
+colnames(seurat_obj@meta.data)[col_start:col_end] <- names(markers_NMF)
+
+nmf_score_final_t <- seurat_obj@meta.data %>% dplyr::select(contains(names(markers_NMF)))
+nmf_score_final_t <- metagene_score_signature(nmf_score_final_t, length(markers_NMF), 1)
+
+seurat_obj <- AddMetaData(seurat_obj, nmf_score_final_t$signature_1, col.name = 'Metaprogram')
+
+## Cell cycle scoring 
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+seurat_obj <- CellCycleScoring(seurat_obj, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+
+## Define high-cycling vs low-cycling cells
+Cycling <- WhichCells(seurat_obj, expression = S.Score > 0 | G2M.Score > 0)
+nonCycling <- WhichCells(seurat_obj, expression = S.Score <= 0 & G2M.Score <= 0)
+
+## Add cycling info to metadata column called 'Cycling_prop'
+seurat_obj$Cycling_status <- ifelse(colnames(seurat_obj) %in% Cycling, "Cycling", "Non-cycling")
+
+```
+
+
+
+
+```{r barplot cycling cells, fig.width = 4, fig.height = 4, fig.align="center"}
+# Barplot of high vs low cycling cells -----------------------------------
+
+plot_bar(seurat_obj, seurat_obj$Metaprogram, seurat_obj$Cycling_status, col = c('red', 'black')) 
+ggsave(file.path(plot_dir, "8b_Barplot_cycling_model.pdf"), width=4, height=4)
+
+Idents(obj) = "model"
+cc <- subset(obj,idents="Coculture_rats")
+
+Idents(cc) = "Metaprogram"
+cc <- subset(cc,idents="Embryonic-like",invert=TRUE)
+plot_bar(cc, cc$Metaprogram, cc$Cycling_prop, col = c('red', 'black')) 
+
+ggplot(cc@meta.data, aes(Metaprogram, fill = Cycling_prop)) +
+    scale_fill_manual(values = c("red","black")) + 
+    geom_bar(position = "fill", color="black") +
+    labs (y='Proportion', x='') + 
+    theme(panel.border = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_blank(),
+          panel.background = element_blank(),
+          axis.line = element_line(colour = "black"),
+          axis.text.x = element_text(size=14, angle = 90, vjust = 0.5, hjust=1, colour="black"),
+          axis.text.y = element_text(size=14, colour="black"),
+          axis.title=element_text(size=14),
+          legend.text = element_text(size = 14),
+          legend.title = element_blank()) 
+
+
+custom_order = c("Neuroepithelial-like","MES_Hypoxia","Ependymal-like","Neuronal-like","Radial-glia-like","Embryonic-neuronal-like")
+
+ggplot(cc@meta.data, aes(factor(Metaprogram,custom_order), fill = Cycling_prop)) +
+    scale_fill_manual(values = c("red","black")) + 
+    geom_bar(position = "fill", color="black") +
+    labs (y='Proportion', x='') + 
+    theme(panel.border = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_blank(),
+          panel.background = element_blank(),
+          axis.line = element_line(colour = "black"),
+          axis.text.x = element_text(size=14, angle = 90, vjust = 0.5, hjust=1, colour="black"),
+          axis.text.y = element_text(size=14, colour="black"),
+          axis.title=element_text(size=14),
+          legend.text = element_text(size = 14),
+          legend.title = element_blank()) 
+
+ggsave(file.path(plot_dir,"EP1NS_hiNs_Cycling.pdf"), width=4, height=4)
+```
+
+
+```{r}
+# color ST-EPN MPs -----------------------------------
+
+colors_metaprograms<- c("#F99E93FF","#9E5E9BFF","#74ADD1FF",'#0F4F8B', "#ACD39EFF","#96410EFF", 'mistyrose1')
+
+names(colors_metaprograms) <- c("Neuroepithelial-like", "Radial-glia-like", 
+                                "Embryonic-neuronal-like", "Neuronal-like" ,"Ependymal-like", "MES_Hypoxia", "Embryonic-like")
+
+
+ggplot(seurat_obj@meta.data, aes(model, fill = Metaprogram)) +
+    scale_fill_manual(values = colors_metaprograms) + 
+    geom_bar(position = "fill", color="black") +
+    labs (y='Proportion', x='') + 
+    theme(panel.border = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_blank(),
+          panel.background = element_blank(),
+          axis.line = element_line(colour = "black"),
+          axis.text.x = element_text(size=14, angle = 90, vjust = 0.5, hjust=1, colour="black"),
+          axis.text.y = element_text(size=14, colour="black"),
+          axis.title=element_text(size=14),
+          legend.text = element_text(size = 14),
+          legend.title = element_blank()) 
+
+ggsave(file.path(plot_dir,"EP1NS_hiNs_Barplot_Metaprogram_AddModuleScore.pdf"), width=5.5, height=4)
+```
+
+
+## Merge patient & EP1NS monoculture/hiNs coculture dataset 
+
+```{R}
+# Modify patient seurat object -----------------------------------
+
+Idents(patients) = "Subtype"
+patients = subset(patients,idents="ZFTA-RELA")
+colnames(patients@meta.data) <- gsub("_NMF","",colnames(patients@meta.data))
+colnames(patients@meta.data) <- gsub("Embryonic/neuronal-like","Embryonic-neuronal-like",colnames(patients@meta.data))
+colnames(patients@meta.data) <- gsub("MES-like","MES_Hypoxia",colnames(patients@meta.data))
+colnames(patients@meta.data) <- gsub("Cycling_prop","Cycling_status",colnames(patients@meta.data))
+
+patients@meta.data = patients@meta.data[,c(1:12,26:41)]
+patients$model = "Patient"
+
+```
+
+
+
+```{r}
+# Merge patient & EP1NS monoculture/hiNs coculture -----------------------------------
+
+new_obj = merge(seurat_obj,patients)
+new_obj = JoinLayers(new_obj)
+
+# process with Full Seurat 
+metadata <- new_obj@meta.data
+
+cm <- new_obj[["RNA"]]$counts
+cm_norm <- as.matrix(log2(cm/10+1))
+cm_mean <- log2(Matrix::rowMeans(cm)+1)
+cm_center <- cm_norm - rowMeans(cm_norm)
+
+new_obj <- RunFullSeurat_v5(cm = cm, metadata = metadata,  doBatch = F, project = 'Patients_EPNcoculture')
+qsave(new_obj,file.path(data_dir,"EP1NS_hiNs_monococulture_patient_merged.qs"))
+```
+
+
+```{r}
+seurat_obj <- qread(file.path(data_dir,"EP1NS_hiNs_monococulture_merged.qs"))
+```
+
+
+# Violin plots
+
+```{r}
+# Violin Plots of MP signatures -----------------------------------
+
+shapiro.test(seurat_obj$`Neuroepithelial-like`)
+
+p <- VlnPlot(seurat_obj, features = "Neuroepithelial-like", group.by = 'model', combine = FALSE, pt.size=0, cols = colors_EP1NS) 
+
+p[[1]] + NoLegend() +
+  scale_fill_manual(values = colors_EP1NS) + 
+  geom_boxplot(outlier.shape=NA, width=0.1, fill="white") +
+  stat_compare_means(aes(label = after_stat(p.format)), 
+                          method = 'wilcox', 
+                          size = 5, 
+                          label.y.npc = 0.95, 
+                          label.x.npc = 0.5, 
+                          ) + 
+  NoLegend()
+
+ggsave(file.path(plot_dir, "hiNs_EP1NS_Neuroepithelial-like.pdf"), width=2.5, height=4)
+
+
+p <- VlnPlot(seurat_obj, features = "Radial-glia-like", group.by = 'model', combine = FALSE, pt.size=0, cols = colors_EP1NS) 
+
+p[[1]] + NoLegend() +
+  scale_fill_manual(values = colors_EP1NS) + 
+  geom_boxplot(outlier.shape=NA, width=0.1, fill="white") +
+  stat_compare_means(aes(label = after_stat(p.format)), 
+                          method = 'wilcox', 
+                          size = 5, 
+                          label.y.npc = 0.95, 
+                          label.x.npc = 0.5, 
+                          ) + NoLegend()
+
+ggsave(file.path(plot_dir, "hiNs_EP1NS_Radial glia-like.pdf"), width=2.5, height=4)
+
+p <- VlnPlot(seurat_obj, features = "Embryonic-neuronal-like", group.by = 'model', combine = FALSE, pt.size=0, cols = colors_EP1NS) 
+
+p[[1]] + NoLegend() +
+  scale_fill_manual(values = colors_EP1NS) + 
+  geom_boxplot(outlier.shape=NA, width=0.1, fill="white") +
+  stat_compare_means(aes(label = after_stat(p.format)), 
+                          method = 'wilcox', 
+                          size = 5, 
+                          label.y.npc = 0.95, 
+                          label.x.npc = 0.5, 
+                          ) + NoLegend()
+ggsave(file.path(plot_dir, "EP1NS_Coculture_hiNs/hiNs_EP1NS_Embryonic-neuronal-like_Wilcox.pdf"), width=2.5, height=4)
+
+
+p <- VlnPlot(seurat_obj, features = "Neuronal-like", group.by = 'model', combine = FALSE, pt.size=0, cols = colors_EP1NS) 
+p[[1]] + NoLegend() +
+  scale_fill_manual(values = colors_EP1NS) + 
+  geom_boxplot(outlier.shape=NA, width=0.1, fill="white") +
+  stat_compare_means(aes(label = after_stat(p.format)), 
+                          method = 'wilcox', 
+                          size = 5, 
+                          label.y.npc = 0.95, 
+                          label.x.npc = 0.5, 
+                          ) + NoLegend()
+
+
+ggsave(file.path(plot_dir, "hiNs_EP1NS_Neuronal-like_nostats.pdf"), width=2.5, height=4)
+
+
+
+p <- VlnPlot(seurat_obj, features = "Ependymal-like", group.by = 'model', combine = FALSE, pt.size=0, cols = colors_EP1NS) 
+
+p[[1]] + NoLegend() +
+  scale_fill_manual(values = colors_EP1NS) + 
+  geom_boxplot(outlier.shape=NA, width=0.1, fill="white") +
+  stat_compare_means(aes(label = after_stat(p.format)), 
+                          method = 'wilcox', 
+                          size = 5, 
+                          label.y.npc = 0.95, 
+                          label.x.npc = 0.5, 
+                          ) + NoLegend()
+ggsave(file.path(plot_dir, "EP1NS_Coculture_hiNs/hiNs_EP1NS_Ependymal-like_Wilcox.pdf"), width=2.5, height=4)
+
+
+```
+
+
+# Violin plots
+
+```{r}
+# Violin Plots of marker genes -----------------------------------
+
+markers <- c('VIM', 'TAGLN2', 'NES', 'DCX', 'TUBB3', 'SOX11', 'CCDC40', 'S100B','GFAP')
+
+p <- VlnPlot(seurat_obj, features = markers, group.by = 'model', combine = FALSE, pt.size=0, cols = colors_EP1NS) 
+
+for(i in 1:length(p)) {
+    p[[i]] <- p[[i]] + NoLegend() +
+      labs (y='Gene expression', x='') + 
+      scale_fill_manual(values = colors_EP1NS) + 
+      geom_boxplot(outlier.shape=NA, width=0.1, fill="white") +
+      #stat_compare_means(aes(label = after_stat(p.format)), 
+      #                   method = 'wilcox', 
+      #                   label.x.npc = 0.5, 
+      #                   label.y.npc = 0.92, 
+      #                   label.x = 1.3
+      #                   ) + 
+         theme_vln +
+      NoLegend()
+  }
+plot_grid(plotlist = p, ncol=4)
+ggsave(file.path(plot_dir, "hiNs_EP1NS_VlnPlot_markers_nostats.pdf"), width=10, height=13)
+```
+
+
+# Cell state plot
+
+Plot distribution of samples on the hierarchy plot
+
+```{r cellstate plot colored by subtype, fig.width = 16, fig.height = 4, fig.align="center"}
+
+x1 = "Neuroepithelial.like"
+x2 = "Embryonic.like"
+y1 = "Neuronal.like"
+y2 = "Ependymal.like"
+
+group.by="model"
+
+sample=new_obj
+variables_to_retrieve <- c(x1, x2, y1,y2)
+
+# And store them as a tibble.
+scores <- sample@meta.data[, variables_to_retrieve]
+# Shuffle the cells so that we accomplish a random plotting, not sample by sample.
+
+# Compute Y axis values.
+d <- apply(scores, 1, function(x){max(x[c(x1, x2)]) - max(x[c(y1, y2)])})
+
+# Compute X axis values.
+x <- vapply(seq_along(d), function(x) {
+  if (d[x] > 0) {
+    d <- log2(abs(scores[x, x1] - scores[x, x2]) + 1)
+    ifelse(scores[x, x1] < scores[x, x2], d, -d)
+  } else {
+    d <- log2(abs(scores[x, y1] - scores[x, y2]) + 1)
+    ifelse(scores[x, y1] < scores[x, y2], d, -d)
+  }
+}, FUN.VALUE = numeric(1))
+
+names(x) <- rownames(scores)
+
+# Plot.
+df_E <- data.frame(row.names = rownames(scores))
+df_E[["set_x"]] <- x
+df_E[["set_y"]] <- d
+df_E[["group.by"]] <- sample@meta.data[, group.by]
+
+custom_order = c('Patient','Coculture_hiNs','Monoculture')
+df_E$group.by = factor(df_E$group.by,levels=custom_order)
+df_reordered= df_E[order(df_E$group.by),]
+
+
+ggplot(df_reordered %>% 
+         arrange(group.by),
+       aes(x=set_x,
+              y=set_y,
+              col=group.by))+
+  geom_point(size=1)+
+  scale_color_manual(values=colors_EP1NS_merged) +
+   theme_cellstate_plot + 
+  labs(x = 'Relative meta-module score', y = 'Relative meta-module score', title = 'Cellular hierarchy', subtitle = 'n = 6033 cells'
+       ) +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") 
+  #xlim(-2, 1) + ylim(-1, 3)
+
+ggsave(file.path(plot_dir, "EP1NS_hinS_CellState_plot_4way_Metaprograms.pdf"), width=5.5, height=4)
+
+
+```
+
+
+```{r}
+qsave(new_obj,file.path(data_dir,"Patient_EP1NS_hiNs.qs"))
+qsave(seurat_obj,file.path(data_dir,"EP1NS_hiNs_ccmc.qs"))
+```
+
+
+

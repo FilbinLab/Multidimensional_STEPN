@@ -1,0 +1,479 @@
+---
+title: "Rat cocultures "
+output: html_document
+author: "Daeun Jeong" 
+date: "2025-08-07"
+---
+
+```{r preparation environment, message=FALSE, warning=FALSE}
+
+# Load packages -----------------------------------
+library(dplyr)
+library(qs)
+library(Seurat)
+library(ggplot2)
+library(patchwork)
+library(SeuratObject)
+library(data.table)
+library(tidyverse)
+library(ggpubr)
+library(cowplot)
+library(ggrastr)
+library(speckle)
+
+# Organize environment  -----------------------------------
+
+base_dir <- "/home/dj83/MANUSCRIPT/9-scRNAseq_coculture"
+data_dir <- file.path(base_dir,"data")
+analysis_dir <- file.path(base_dir, 'analysis')
+resource_dir <- file.path(base_dir, 'scripts/resources')
+plot_dir <- file.path(base_dir,"plots")
+source(file.path(resource_dir, 'Plot_style_v2.R'))
+source(file.path(resource_dir, 'single_cell_preprocessing_helper_functions_CBJr.R'))
+source(file.path(resource_dir, 'NMF_helper_function.R'))
+
+
+# Define color palettes  -----------------------------------
+colors_metaprograms<- c("gray30","#F99E93FF","#9E5E9BFF","#74ADD1FF",'#0F4F8B', "#ACD39EFF","#96410EFF", 'mistyrose1')
+
+names(colors_metaprograms) <- c("Cycling", "Neuroepithelial-like", "Radial-glia-like", 
+                          "Embryonic-neuronal-like", "Neuronal-like" ,"Ependymal-like", "MES_Hypoxia", "Embryonic-like")
+
+
+colors_model =  c('#54BF14','#e8c712','#eb4f99','#57c1da')
+names(colors_model) <- c('Coculture_rats', 'Monoculture_adh','Monoculture_sph','PDX')
+
+colors_sample_merged <- c('#cacaca','#B5B991FF', '#EA7580FF' ,'#F6A1A5FF' ,'#F8CD9CFF', '#1BB6AFFF', '#088BBEFF' ,'#172869FF','#e57b64','#4577d0','#dd36c1','#36dd99','#dd9636')
+names(colors_sample_merged) <- c("Patient","EP1NS_Monoculture_adh","EP1NS_Monoculture_sph","EP1NS_Coculture_rats","EP1NS_PDX","BT165_Monoculture_adh","BT165_Monoculture_sph","BT165_Coculture_rats","BT165_PDX","VBT242_Monoculture_adh","VBT242_Monoculture_sph","VBT242_Coculture_rats","VBT242_PDX")
+
+colors_model_merged <- c('#cacaca','#54BF14','#e8c712','#eb4f99','#57c1da')
+names(colors_model_merged) <- c('Patient','Coculture', 'Monoculture_adh','Monoculture_sph','PDX')
+```
+
+
+```{r}
+# Load objects -----------------------------------
+obj <- qread(file.path(data_dir,"patient_models.qs"))
+patients = qread(paste0("/home/dj83/data/seurat_objects/seurat_obj_malignant_annotated2.qs"))
+
+BT165rat = qread(paste0(seurat_dir,"SeuratObject-BT165rat.qs"))
+EP1NSrat = qread(paste0(seurat_dir,"SeuratObject-EP1NSrat.qs"))
+VBT242rat = qread(paste0(seurat_dir,"SeuratObject-VBT242rat.qs"))
+```
+
+
+
+```{r}
+# Proceed with downstream analysis separately for human and rat cells -----------------------------------
+
+Idents(BT165rat) = "species"
+BT165rat = subset(BT165rat,idents="Human")
+BT165rat$sample="BT165_rat"
+
+Idents(EP1NSrat) = "species"
+EP1NSrat = subset(EP1NSrat,idents="Human")
+EP1NSrat$sample="EP1NS_rat"
+
+Idents(VBT242rat) = "species"
+VBT242rat = subset(VBT242rat,idents="Human")
+VBT242rat$sample="VBT242_rat"
+
+seurat_obj = merge(BT165rat,EP1NSrat)
+seurat_obj = merge(seurat_obj,VBT242rat)
+seurat_obj = JoinLayers(seurat_obj)
+
+seurat_obj <- subset(seurat_obj, features = grep("^GRCh38----", rownames(seurat_obj), value = TRUE))
+rownames(seurat_obj) <- gsub("GRCh38----", "", rownames(seurat_obj))
+seurat_obj <- subset(seurat_obj, features = grep("^ENSG", rownames(seurat_obj), value = TRUE, invert = T))
+
+#data_Rat <- subset(data, species == "Rat")
+#data_Rat <- subset(data_Rat, features = grep("^mRatBN7-2-|tdTomato", rownames(data_Rat), value = TRUE))
+#rownames(data_Rat) <- gsub("mRatBN7-2-|GRCh38----", "", rownames(data_Rat))
+#data_Rat <- subset(data_Rat, features = grep("^ENSRNOG", rownames(data_Rat), value = TRUE, invert = T))
+```
+
+
+```{r}
+seurat_obj = merge(seurat_obj,obj3)
+seurat_obj = JoinLayers(seurat_obj)
+```
+
+
+```{r}
+# process with Full Seurat  -----------------------------------
+metadata <- seurat_obj@meta.data
+
+cm <- seurat_obj[["RNA"]]$counts
+cm_norm <- as.matrix(log2(cm/10+1))
+cm_mean <- log2(Matrix::rowMeans(cm)+1)
+cm_center <- cm_norm - rowMeans(cm_norm)
+
+new_obj <- RunFullSeurat_v5(cm = cm, metadata = metadata,  doBatch = F, project = 'EPNcoculture')
+seurat_obj = new_obj
+
+seurat_obj$sample = gsub("_rat","_Coculture_rats",seurat_obj$sample)
+seurat_obj$sample = gsub("adh","_Monoculture_adh",seurat_obj$sample)
+seurat_obj$sample = gsub("sph","_Monoculture_sph",seurat_obj$sample)
+seurat_obj$sample = gsub("PDX","_PDX",seurat_obj$sample)
+
+
+seurat_obj$sample = factor(seurat_obj$sample,levels=c("EP1NS_Monoculture_adh","EP1NS_Monoculture_sph","EP1NS_Coculture_rats","EP1NS_PDX","BT165_Monoculture_adh","BT165_Monoculture_sph","BT165_Coculture_rats","BT165_PDX","VBT242_Monoculture_adh","VBT242_Monoculture_sph","VBT242_Coculture_rats","VBT242_PDX"))
+
+seurat_obj$model = seurat_obj$sample
+seurat_obj$model = sub("^[^_]*_", "", seurat_obj$model)
+seurat_obj$model = factor(seurat_obj$model, levels=c('Monoculture_adh','Monoculture_sph','Coculture_rats','PDX'))
+
+
+# load NMF gene list
+markers_NMF = read.csv(file.path(base_dir,"TableS4_NMF_genes.csv"),header=TRUE)
+colnames(markers_NMF) = markers_NMF[1,]
+markers_NMF = markers_NMF[2:31,]
+markers_NMF = as.list(markers_NMF)
+names(markers_NMF) =gsub("MES/Hypoxia","MES_Hypoxia",names(markers_NMF))
+
+
+# score tumors
+seurat_obj <- AddModuleScore(object = seurat_obj, assay = 'RNA', features = markers_NMF, name = names(markers_NMF))
+col_start <- length(colnames(seurat_obj@meta.data)) - length(names(markers_NMF)) +1
+col_end <- length(colnames(seurat_obj@meta.data))
+colnames(seurat_obj@meta.data)[col_start:col_end] <- names(markers_NMF)
+
+
+# Cell cycle scoring -----------------------------------
+s.genes <- cc.genes$s.genes
+g2m.genes <- cc.genes$g2m.genes
+seurat_obj <- CellCycleScoring(seurat_obj, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+
+## Define high-cycling vs low-cycling cells
+Cycling <- WhichCells(seurat_obj, expression = S.Score > 0 | G2M.Score > 0)
+nonCycling <- WhichCells(seurat_obj, expression = S.Score <= 0 & G2M.Score <= 0)
+
+# Add cycling info to metadata column called 'Cycling_prop'
+seurat_obj$Cycling_prop <- ifelse(colnames(seurat_obj) %in% Cycling, "Cycling", "Non-cycling")
+
+# scale data
+seurat_obj <- ScaleData(seurat_obj)
+
+
+# Use NMF scoring to transfer labels -----------------------------------
+
+cm <- seurat_obj[["RNA"]]$counts
+cm_norm <- as.matrix(log2(cm/10+1))
+cm_mean <- log2(Matrix::rowMeans(cm)+1)
+cm_center <- cm_norm - rowMeans(cm_norm)
+
+nmf_marker_genes_final <- markers_NMF[!names(markers_NMF) %in% 'Cycling']
+
+nmf_score_final <- scoreNmfGenes(cm_center, cm_mean, nmf_marker_genes_final)
+nmf_score_final <- t(nmf_score_final)
+
+num_meta_program <- length(nmf_marker_genes_final)
+nmf_score_final_t <- data.frame(nmf_score_final)
+for (i in 1:2){
+  nmf_score_final_t <- metagene_score_signature(nmf_score_final_t, num_meta_program, i)
+}
+
+nmf_score_final_t$signature_1 <- gsub('\\.', '-', nmf_score_final_t$signature_1)
+nmf_score_final_t$signature_2 <- gsub('\\.', '-', nmf_score_final_t$signature_2)
+
+meta <- nmf_score_final_t
+metadata <- seurat_obj@meta.data
+metadata <- cbind(metadata, meta)
+
+seurat_obj <- AddMetaData(seurat_obj, metadata)
+```
+
+
+## Merge patient and rat coculture data
+
+```{r}
+# merge patients & models-----------------------------------
+
+models = seurat_obj
+models@meta.data = models@meta.data[,c(1:26,37)]
+colnames(models@meta.data) = gsub("Cycling_prop","Cycling_status",colnames(models@meta.data))
+
+seurat_obj_merged = merge(models,patients)
+seurat_obj_merged = JoinLayers(seurat_obj_merged)
+
+Idents(seurat_obj_merged)="model"
+seurat_obj_merged$model = gsub("Coculture_rats","Coculture",seurat_obj_merged$model)
+seurat_obj_merged$model = factor(seurat_obj_merged$model, levels = c('Patient','Monoculture_adh','Monoculture_sph','Coculture','PDX'))
+
+qsave(seurat_obj_merged,file.path(data_dir,"patient_models_merged.qs"))
+qsave(seurat_obj,file.path(data_dir,"patient_models.qs"))
+```
+
+
+```{r}
+# Modify merged object -----------------------------------
+
+patient_models_merged = qread(file.path(data_dir,"patient_models_merged.qs"))
+patient_models_merged$models_merged <- patient_models_merged$sample 
+patient_models_merged@meta.data[patient_models_merged@meta.data$model=="Patient",]$models_merged <- "Patient"
+qsave(patient_models_merged, file.path(data_dir,"patient_models_merged.qs"))
+```
+
+
+
+# Cell state plot 
+
+```{r cellstate plot}
+
+# By sample ------------------------------------
+
+x1 = "Neuroepithelial.like"
+x2 = "Embryonic.like"
+y1 = "Neuronal.like"
+y2 = "Ependymal.like"
+
+group.by="models_merged"
+sample=patient_models_merged
+variables_to_retrieve <- c(x1, x2, y1,y2)
+
+## Store them as a tibble
+
+scores <- sample@meta.data[, variables_to_retrieve]
+
+
+## Compute Y axis values
+d <- apply(scores, 1, function(x){max(x[c(x1, x2)]) - max(x[c(y1, y2)])})
+
+# Compute X axis value
+x <- vapply(seq_along(d), function(x) {
+  if (d[x] > 0) {
+    d <- log2(abs(scores[x, x1] - scores[x, x2]) + 1)
+    ifelse(scores[x, x1] < scores[x, x2], d, -d)
+  } else {
+    d <- log2(abs(scores[x, y1] - scores[x, y2]) + 1)
+    ifelse(scores[x, y1] < scores[x, y2], d, -d)
+  }
+}, FUN.VALUE = numeric(1))
+
+names(x) <- rownames(scores)
+
+
+## Plot
+
+df_E <- data.frame(row.names = rownames(scores))
+df_E[["set_x"]] <- x
+df_E[["set_y"]] <- d
+df_E[["group.by"]] <- sample@meta.data[, group.by]
+
+custom_order = c("Patient","EP1NS_Monoculture_adh","EP1NS_Monoculture_sph","EP1NS_Coculture_rats","EP1NS_PDX","BT165_Monoculture_adh","BT165_Monoculture_sph","BT165_Coculture_rats","BT165_PDX","VBT242_Monoculture_adh","VBT242_Monoculture_sph","VBT242_Coculture_rats","VBT242_PDX")
+
+df_E$group.by = factor(df_E$group.by,levels=custom_order)
+df_reordered= df_E[order(df_E$group.by),]
+
+
+ggplot(df_reordered %>% 
+         arrange(group.by),
+       aes(x=set_x,
+              y=set_y,
+              col=group.by))+
+  geom_point(size=1)+
+  scale_color_manual(values=colors_sample_merged) +
+   theme_cellstate_plot + 
+  labs(x = 'Relative meta-module score', y = 'Relative meta-module score', title = 'Cellular hierarchy', subtitle = 'n = 4540 cells'
+       ) +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") 
+  #xlim(-2, 1) + ylim(-1, 3)
+
+ggsave(file.path(plot_dir, "CellState_plot_4way_Metaprograms_patients_samples_grouped.pdf"), width=7, height=4)
+
+```
+
+
+
+```{r cellstate plot}
+
+# By model  ------------------------------------
+
+x1 = "Neuroepithelial.like"
+x2 = "Embryonic.like"
+y1 = "Neuronal.like"
+y2 = "Ependymal.like"
+
+group.by="model"
+sample=seurat_obj_merged
+variables_to_retrieve <- c(x1, x2, y1,y2)
+
+# And store them as a tibble
+scores <- sample@meta.data[, variables_to_retrieve]
+
+
+# Compute Y axis values
+d <- apply(scores, 1, function(x){max(x[c(x1, x2)]) - max(x[c(y1, y2)])})
+
+# Compute X axis values
+x <- vapply(seq_along(d), function(x) {
+  if (d[x] > 0) {
+    d <- log2(abs(scores[x, x1] - scores[x, x2]) + 1)
+    ifelse(scores[x, x1] < scores[x, x2], d, -d)
+  } else {
+    d <- log2(abs(scores[x, y1] - scores[x, y2]) + 1)
+    ifelse(scores[x, y1] < scores[x, y2], d, -d)
+  }
+}, FUN.VALUE = numeric(1))
+
+names(x) <- rownames(scores)
+
+# Plot
+
+df_E <- data.frame(row.names = rownames(scores))
+df_E[["set_x"]] <- x
+df_E[["set_y"]] <- d
+df_E[["group.by"]] <- sample@meta.data[, group.by]
+
+custom_order = c('Patient','Monoculture_sph','Monoculture_adh','Coculture','PDX')
+df_E$group.by = factor(df_E$group.by,levels=custom_order)
+df_reordered= df_E[order(df_E$group.by),]
+
+
+ggplot(df_E, aes(x=set_x,
+              y=set_y,
+              col=group.by))+
+  geom_point(size=1)+
+  scale_color_manual(values=colors_model_merged) +
+   theme_cellstate_plot + 
+  labs(x = 'Relative meta-module score', y = 'Relative meta-module score', title = 'Cellular hierarchy' #, subtitle = 'n = 919 cells'
+       ) +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") + facet_grid(.~group.by)
+  #xlim(-2, 1) + ylim(-1, 3)
+
+ggsave(file.path(plot_dir, "CellState_plot_4way_Metaprograms_patients_separated.pdf"), width=12, height=3)
+
+
+ggplot(df_reordered %>% 
+         arrange(group.by),
+       aes(x=set_x,
+              y=set_y,
+              col=group.by))+
+  geom_point(size=1)+
+  scale_color_manual(values=colors_sample_merged) +
+   theme_cellstate_plot + 
+  labs(x = 'Relative meta-module score', y = 'Relative meta-module score', title = 'Cellular hierarchy', subtitle = 'n = 4540 cells'
+       ) +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") 
+  #xlim(-2, 1) + ylim(-1, 3)
+
+ggsave(file.path(plot_dir, "CellState_plot_4way_Metaprograms_patients_by_Sample_grouped.pdf"), width=6, height=4)
+
+```
+
+
+
+# Barplot of high vs low cycling cells
+
+```{r}
+# Bar plot ------------------------------------
+
+plot_bar(obj, obj$model, obj$Cycling_prop, col = c('red', 'black'))
+ggsave(file.path(plot_dir, "Barplot_cycling_model.pdf"), width=4, height=4)
+
+
+## Coculture_rats barplot 
+
+Idents(obj) = "model"
+cc <- subset(obj,idents="Coculture_rats")
+
+Idents(cc) = "Metaprogram"
+cc <- subset(cc,idents="Embryonic-like",invert=TRUE)
+plot_bar(cc, cc$Metaprogram, cc$Cycling_prop, col = c('red', 'black')) 
+
+ggplot(cc@meta.data, aes(Metaprogram, fill = Cycling_prop)) +
+    scale_fill_manual(values = c("red","black")) + 
+    geom_bar(position = "fill", color="black") +
+    labs (y='Proportion', x='') + 
+    theme(panel.border = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_blank(),
+          panel.background = element_blank(),
+          axis.line = element_line(colour = "black"),
+          axis.text.x = element_text(size=14, angle = 90, vjust = 0.5, hjust=1, colour="black"),
+          axis.text.y = element_text(size=14, colour="black"),
+          axis.title=element_text(size=14),
+          legend.text = element_text(size = 14),
+          legend.title = element_blank()) 
+
+
+custom_order = c("Neuroepithelial-like","MES_Hypoxia","Ependymal-like","Neuronal-like","Radial-glia-like","Embryonic-neuronal-like")
+
+ggplot(cc@meta.data, aes(factor(Metaprogram,custom_order), fill = Cycling_prop)) +
+    scale_fill_manual(values = c("red","black")) + 
+    geom_bar(position = "fill", color="black") +
+    labs (y='Proportion', x='') + 
+    theme(panel.border = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_blank(),
+          panel.background = element_blank(),
+          axis.line = element_line(colour = "black"),
+          axis.text.x = element_text(size=14, angle = 90, vjust = 0.5, hjust=1, colour="black"),
+          axis.text.y = element_text(size=14, colour="black"),
+          axis.title=element_text(size=14),
+          legend.text = element_text(size = 14),
+          legend.title = element_blank()) 
+
+ggsave(file.path(plot_dir,"Barplot_Cycling_Coculture.pdf"), width=4, height=4)
+
+
+## PDX barplot 
+
+Idents(obj) = "model"
+pdx <- subset(obj,idents="PDX")
+
+Idents(pdx) = "Metaprogram"
+plot_bar(pdx, pdx$Metaprogram, pdx$Cycling_prop, col = c('red', 'black')) 
+
+
+ggplot(pdx@meta.data, aes(Metaprogram, fill = Cycling_prop)) +
+    scale_fill_manual(values = c("red","black")) + 
+    geom_bar(position = "fill", color="black") +
+    labs (y='Proportion', x='') + 
+    theme(panel.border = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_blank(),
+          panel.background = element_blank(),
+          axis.line = element_line(colour = "black"),
+          axis.text.x = element_text(size=14, angle = 90, vjust = 0.5, hjust=1, colour="black"),
+          axis.text.y = element_text(size=14, colour="black"),
+          axis.title=element_text(size=14),
+          legend.text = element_text(size = 14),
+          legend.title = element_blank()) 
+
+
+custom_order = c("Embryonic-like","Neuroepithelial-like","Neuronal-like","MES_Hypoxia","Embryonic-neuronal-like","Radial-glia-like","Ependymal-like")
+
+ggplot(pdx@meta.data, aes(factor(Metaprogram,custom_order), fill = Cycling_prop)) +
+    scale_fill_manual(values = c("red","black")) + 
+    geom_bar(position = "fill", color="black") +
+    labs (y='Proportion', x='') + 
+    theme(panel.border = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          plot.background = element_blank(),
+          panel.background = element_blank(),
+          axis.line = element_line(colour = "black"),
+          axis.text.x = element_text(size=14, angle = 90, vjust = 0.5, hjust=1, colour="black"),
+          axis.text.y = element_text(size=14, colour="black"),
+          axis.title=element_text(size=14),
+          legend.text = element_text(size = 14),
+          legend.title = element_blank()) 
+
+ggsave(file.path(plot_dir,"8c_Barplot_Cycling_PDX.pdf"), width=4, height=4)
+```
+
+
+
+
+
+
+
+
+
+
+
+
