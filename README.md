@@ -25,13 +25,13 @@ Codes to process sc/snRNA-seq data from ST-EPN patient samples. Codes are ordere
 
 Final datasets are cleaned up, annotated and reprocessed using `9_Cleanup_datasets.R` and `10_classification_malignant_normal.R`
 
-Code to display oncoprint of figure 1 is also in this folder (`Oncoprint.R`)
+Code to display oncoprint of Fig 1 is also in this folder (`Oncoprint.R`)
 
 ## 2. Plots
 Codes to plot most figures for ST-EPN patient samples
 
 ## 3. Pseudobulk analysis 
-Codes to plot Extended figure 3 and to plot developmental projections of Fig. 1f and Fig E2a. To prepare the reference datasets, the codes stored in the folder `Developmental_dataset_processing` are used.
+Codes to plot developmental projections of Fig 1f and Extended Data Fig 2a-b. To prepare the reference datasets, the codes stored in the folder `Developmental_dataset_processing` are used.
 
 ## 4. 10X Xenium
 
@@ -49,7 +49,8 @@ It also contains following folders:
 
 ## 5.Co-culture
 
-Experiment to determine the cell state shifts between EP1NS cells cultures alone (monoculture) or with rat neurons and astrocytes (coculture).
+Codes to pre-process and analyze patient models cocultured with rat E19 cortical cells and human iNs+iAs. 
 
 ## 6.Preclinical_models
-Codes to visualize Fig E10a/b
+
+Codes to pre-process patient models 
