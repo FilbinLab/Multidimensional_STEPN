@@ -12,7 +12,8 @@ Contact: daeun_jeong at dfci.harvard.edu, sarag_danielli at dfci.harvard.edu, ca
 2. Plots
 3. Pseudobulk analysis (projections & plots)
 4. Xenium (preprocessing, spatial coherence, niche, neighborhood enrichment, cellchat)
-5. Co-culture (preprocessing, analysis, plots)  
+5. Co-culture (preprocessing, analysis, plots)
+6. Preclinical_models (preprocessing, analysis, plots)
 
 ## 0. Software version requirements 
 
@@ -24,15 +25,16 @@ Codes to process sc/snRNA-seq data from ST-EPN patient samples. Codes are ordere
 
 Final datasets are cleaned up, annotated and reprocessed using `9_Cleanup_datasets.R` and `10_classification_malignant_normal.R`
 
-Code to display oncoprint of figure 1 is also there (`Oncoprint.R`)
+Code to display oncoprint of figure 1 is also in this folder (`Oncoprint.R`)
 
 ## 2. Plots
-Codes to plot most paper figures from ST-EPN patient samples
+Codes to plot most figures for ST-EPN patient samples
 
 ## 3. Pseudobulk analysis 
 Codes to plot Extended figure 3 and to plot developmental projections of Fig. 1f and Fig E2a. To prepare the reference datasets, the codes stored in the folder `Developmental_dataset_processing` are used.
 
 ## 4. 10X Xenium
+
 Code to perform the spatial data analysis. It contains following scripts:
 - `0_preparation_scRNAseq_data.R`: prepare single cell objects for label transfer onto spatial data for annotations.
 - `1_preprocessing.R`: load and preprocess Xenium data.
@@ -46,6 +48,7 @@ It also contains following folders:
 - `cellcharter`: contains scripts to run the CellCharter analysis and plot results.
 
 ## 5.Co-culture
+
 Experiment to determine the cell state shifts between EP1NS cells cultures alone (monoculture) or with rat neurons and astrocytes (coculture).
 
 ## 6.Preclinical_models
