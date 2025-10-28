@@ -25,7 +25,7 @@ SetUpEpendymomaGlobalVarsGeneral <- function(home_dir = '/home/shk490/Multidimen
   raw_data_dir <- glue('{data_dir}/raw_data/xenium_folders')
   sc_mal_path <- glue('{preparation_dir}/data/seurat_obj_malignant_annotated2.qs') # mal only single cell object path
   sc_full_path <- glue('{preparation_dir}/data/seurat_obj_ST_normal_malig_annotated.qs') # all cells (mal and normal and from all subtypes) object
-  sc_reference <- glue('{preparation_dir}/data/Nowakowski_Eze.qs') # single cell reference object path (Nowakowski + Eze)
+  sc_reference <- glue('{preparation_dir}/data/reference_Nowakowski_Eze/Nowakowski_Eze.qs') # single cell reference object path (Nowakowski + Eze)
   zfta_reference <- glue('{data_dir}/analysis/1_preparation/data/ZR_Xenium_projection.qs')
   nc_reference <- glue('{data_dir}/analysis/1_preparation/data/NC_Xenium_projection.qs')
   yap1_reference <- glue('{data_dir}/analysis/1_preparation/data/YAP1_Xenium_projection.qs')
@@ -337,6 +337,147 @@ CreateReferenceFromBaseSC_EPN <- function(seurat_object, seurat_object_mal, subs
   
   # return object
   return (seurat_object)
+}
+
+# score the cells corresponding to provided count matrix for the provided marker genes
+scoreNmfGenes <- function(cm_center, cm_mean, nmf_gene_list, cores = 8, verbose = FALSE, simple = FALSE){
+  message("Scoring signatures... \n")
+  
+  results <- pbapply::pblapply(nmf_gene_list, function(x) {
+    scores <- scoreSignature(cm_center, cm_mean, x, verbose = verbose, simple = simple, cores = cores)
+  })
+  results <- do.call('rbind', results)
+  
+  return(results)
+}
+
+## Compute plain average expression or control corrected signature score (used in function scoreNmfGenes)
+## @param X.center centered relative expression
+## @param X.mean average of relative expression of each gene (log2 transformed)
+## @param n number of genes with closest average expression for control genesets, default = 100
+## @param simple whether use average, default  = FALSE
+scoreSignature <- function(X.center, X.mean, s, n = 100, cores, simple = FALSE, verbose = FALSE) {
+  if(verbose) {
+    message("cells: ", ncol(X.center))
+    message("genes: ", nrow(X.center))
+    message("genes in signature: ", length(s))
+    message("Using simple average?", simple)
+    message("processing...")
+  }
+  
+  s <- intersect(rownames(X.center), s)
+  if (verbose) {message("genes in signature, and also in this dataset: ", length(s))}
+  ##message("These genes are: ", s)
+  
+  if (simple){
+    s.score <- colMeans(X.center[s,])
+  }else{
+    if (length(s) > 100) {
+      s.score <- Matrix::colMeans(do.call(rbind, mclapply(s, function(g) {
+        g.n <- names(sort(abs(X.mean[g] - X.mean))[2:(n+1)])
+        X.center[g, ] - Matrix::colMeans(X.center[g.n, ])
+      }, mc.cores = cores)))
+    } else {
+      s.score <- colMeans(do.call(rbind, lapply(s, function(g) {
+        g.n <- names(sort(abs(X.mean[g] - X.mean))[2:(n+1)])
+        X.center[g, ] - colMeans(X.center[g.n, ])
+      })))
+    }
+  }
+  if(verbose) message(" done")
+  return(s.score)
+}
+
+# get the score and corresponding annotation of each cell for a certain rank
+metagene_score_signature <- function(df, num_metagene, rank=1){
+  col_names = colnames(df)
+  df$tmp1 = apply(df[,1:num_metagene], 1,
+                  function(x) sort(x, decreasing = T)[rank])
+  df$tmp2 = apply(df[,1:num_metagene], 1,
+                  function(x) names(sort(x, decreasing = T))[rank])
+  col_names = c(col_names, paste0("score_", rank), paste0("signature_", rank))
+  colnames(df) = col_names
+  return(df)
+}
+
+# Project dataset in a query (dotplot). Modification of the dotplot making function by Shashank.
+projectDataNoScalingSK <- function(query_cm, query_degs, ref_cm, ref_degs, query_categories_ordered, ref_categories_ordered, filter_top_genes) {
+  
+  # Filtering out genes with none expression
+  ref_cm_filtered <- ref_cm[rowSums(ref_cm) > 0, ref_categories_ordered]
+  query_cm_filtered <- query_cm[rowSums(query_cm) > 0, query_categories_ordered]
+  
+  # filtering out genes which are not present in the other dataset
+  common_genes <- intersect(rownames(ref_cm_filtered), rownames(query_cm_filtered))
+  query_cm_filtered <- query_cm_filtered[common_genes, ]
+  query_degs_filtered <- lapply(query_degs, function(x) x[x %in% common_genes])
+  ref_cm_filtered <- ref_cm_filtered[common_genes, ]
+  ref_degs_filtered <- lapply(ref_degs, function(x) x[x %in% common_genes])
+  
+  # keep only the top_n genes (designated by argument filter_top_genes) in both the deg objects
+  # query_degs_filtered <- lapply(query_degs_filtered, function(x) x[1:filter_top_genes])
+  # ref_degs_filtered <- lapply(ref_degs_filtered, function(x) x[1:filter_top_genes])
+  
+  # Normalize data
+  query_cm_filtered <- t(t(query_cm_filtered)/colSums(query_cm_filtered))*1E4
+  query_cm_norm <- log2(query_cm_filtered/10+1)
+  # query_cm_norm <- log2(query_cm_filtered+1)
+  query_cm_mean <- log2(rowMeans(query_cm_filtered)+1)
+  query_cm_center <- t(scale(t(query_cm_norm)))
+  ref_cm_filtered <- t(t(ref_cm_filtered)/colSums(ref_cm_filtered))*1E4
+  ref_cm_norm <- log2(ref_cm_filtered+1)
+  ref_cm_mean <- log2(rowMeans(ref_cm_filtered)+1)
+  ref_cm_center <- t(scale(t(ref_cm_norm)))
+  
+  # Score metagene programs in ref scRNA-seq data
+  message('Scoring query signatures in reference...')
+  normal_score <- t(scoreNmfGenes(ref_cm_center, ref_cm_mean, query_degs_filtered, verbose = F))
+  
+  # Score malignant cells with ref DEGs
+  message('Scoring reference signatures in query...')
+  tumor_score <- scoreNmfGenes(query_cm_center, query_cm_mean, ref_degs_filtered, verbose = F)
+  tumor_score <- tumor_score[, colnames(normal_score)]
+  
+  message('Saving plot...')
+  ## max-min normalization and melt scoring normal cells by malignant metaprogram
+  normal_score_long <- reshape2::melt(normal_score)
+  colnames(normal_score_long) <- c("Cell_type", "Metaprogram", "normal_score")
+  
+  ## max-min normalization and melt scoring tumor cells by normal DEGs
+  tumor_score_long <- reshape2::melt(tumor_score)
+  colnames(tumor_score_long) <- c("Cell_type", "Metaprogram", "tumor_score")
+  
+  ## Combine into one and Trim values lower then 0 and greater then 1 (make less than 0 values into 0, and more than 1 values into 1)
+  plot_df <- as_tibble(normal_score_long)
+  plot_df$tumor_score <- tumor_score_long$tumor_score # simply attaching tumor scores instead of left_joining because the order of celltype-metaprogram rows should be same (it was ensured above)
+  plot_df$normal_score = trimScores(plot_df$normal_score, 1, 0)
+  plot_df$tumor_score = trimScores(plot_df$tumor_score, 1, 0)
+  
+  ## Sort metaprogram order
+  plot_df$Metaprogram <- factor(plot_df$Metaprogram, levels = gsub("_", "-", query_categories_ordered))
+  plot_df$Cell_type <- factor(plot_df$Cell_type, levels = ref_categories_ordered)
+  
+  ## Plot
+  pt <- ggplot(plot_df, aes(x=Cell_type, y=Metaprogram)) + 
+    geom_point(aes(color=tumor_score, size=normal_score)) + scale_size_area(max_size=9) +
+    paletteer::scale_colour_paletteer_c("viridis::mako", direction = -1) +
+    labs(x = "Normal cell type", y = "Malignant metaprogram",
+         color = "Expression score\n(tumor cells)", size = "Expression score\n(normal cells)") +
+    theme_classic() + 
+    theme(axis.title = element_text(size = 16),
+          axis.text.x = element_text(size = 16, hjust = 1, angle = 45, color = 'black'),
+          axis.text.y = element_text(size = 16, color = 'black'),
+          legend.title = element_text(size = 16), legend.text = element_text(size = 16),
+          plot.background = element_rect(fill = alpha("white", 0)), panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_line(size = 0.5, linetype = 'dashed', colour = "grey"))
+  
+  return (list(pt, plot_df))
+}
+
+# function to clip values (used in dotplot making function above)
+trimScores <- function(metagene_scores, upper, lower){
+  tmp = ifelse(metagene_scores > upper, upper, ifelse(metagene_scores < lower, lower, metagene_scores))
+  return(tmp)
 }
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
