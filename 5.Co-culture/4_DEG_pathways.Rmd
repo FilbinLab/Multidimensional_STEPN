@@ -1,5 +1,5 @@
 ---
-title: "DEGs of scRNAseq results of mono- vs. co-culture of EP1NS cells"
+title: "DEGs of scRNAseq results of mono- vs. co-culture"
 author: "Sara Danielli"
 output:
   html_document:
