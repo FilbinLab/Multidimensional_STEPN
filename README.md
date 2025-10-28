@@ -47,10 +47,10 @@ It also contains following folders:
 - `figures`: contains code to generate the figures involving spatial analysis in the manuscript.
 - `cellcharter`: contains scripts to run the CellCharter analysis and plot results.
 
-## 5.Co-culture
+## 5. Co-culture
 
 Codes to pre-process and analyze patient models cocultured with rat E19 cortical cells and human iNs+iAs. 
 
-## 6.Preclinical_models
+## 6. Preclinical_models
 
 Codes to pre-process patient models 
