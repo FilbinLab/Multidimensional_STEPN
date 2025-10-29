@@ -1,3 +1,6 @@
+## This script imports the two references preprocessed in the script before and combines them into a single dataset
+## It also calculates pseudobulked cm, HVGs and DEGs for projection in the next script
+
 # Load packages -----------------------------------
 rm(list = ls())
 
@@ -69,13 +72,13 @@ Nowakowski <- subset(Nowakowski, subset = cell_type != c("NA"))
 Nowakowski[['origin']] <- 'Nowakowski_2017'
 
 
-# Process datasets -----------------------------------
+# Merge datasets -----------------------------------
 data <- merge(Eze, Nowakowski)
 data <- JoinLayers(data)
 
 rm(Nowakowski, Eze)
 
-# process with Full Seurat
+# reprocess with Full Seurat
 data@meta.data$origin -> samples
 
 cm <- data[["RNA"]]$counts

@@ -1,3 +1,5 @@
+## This script imports two developmental references from the original publications, and prepares them for developmental mapping
+
 # Load packages -----------------------------------
 rm(list = ls())
 
@@ -20,7 +22,7 @@ source(file.path(resource_dir, 'NMF_helper_function.R'))
 
 
 
-# Process Nowakowski et al. 2017 (cortex) -----------------------------------
+# Load and process Nowakowski et al. 2017 (cortex) -----------------------------------
 
 analysis_dir <- file.path(base_dir, 'data/Nowakowski_2017')
 
@@ -107,7 +109,7 @@ qsave(VariableFeatures(ref), file.path(analysis_dir,"hvgs_Age_in_Weeks.qs"))
 
 
 
-# Process Eze et al. 2021 (neuroepithelial) -----------------------------------
+# 2) Load and process Eze et al. 2021  -----------------------------------
 
 analysis_dir <- file.path(base_dir, 'data/Eze_2021')
 
