@@ -1,0 +1,909 @@
+---
+title: "ST-EPN malignant cells - sc/snRNA-seq (Figure 2)"
+author: "Sara Danielli"
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+---
+
+```{r, setup, include = FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = TRUE, cache = TRUE, warning = FALSE, comment = FALSE)
+```
+
+```{r preparation environment, message=FALSE, warning=FALSE, results='hide'}
+# Load packages -----------------------------------
+library(readxl)
+library(writexl)
+library(qs)
+library(openxlsx)
+library(ggplot2)
+
+# Organize environment  -----------------------------------
+
+# base_dir (change depending on the person who runs the ode)
+base_dir <- "/Users/sdaniell/Partners HealthCare Dropbox/Sara Danielli/Filbin lab - sample location/Filbin Lab Active/Sara/Project/Ependymoma/11 - Plots scRNAseq"
+
+# directory with seurat objects
+data_dir <- file.path(base_dir, "data")
+
+# directory where to store outputs
+analysis_dir <- file.path(base_dir, 'analysis')
+plot_dir <- file.path(analysis_dir, "plots/STEPN/malignant")
+if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
+
+# load helper scripts
+resource_dir <- file.path(base_dir, "scripts/resources")
+source(file.path(resource_dir, "NMF_helper_function.R")) 
+source(file.path(resource_dir, "Plot_style_v2.R"))
+source(file.path(resource_dir, 'single_cell_preprocessing_helper_functions_CBJr.R'))
+
+
+
+# load in data -----------------------------------
+if (file.exists(file.path(base_dir, "data/patient/seurat_obj_ST_malig_annotated.qs"))) {
+    print("The file already exists. Skipping this part of the code.")
+  # read  dataset
+  seurat_obj_mal <- qread(file.path(base_dir, "data/patient/seurat_obj_ST_malig_annotated.qs"))
+  
+} else {
+
+  # load seurat object ST-EPN
+  seurat_obj_mal <- qread(file = file.path(base_dir, "data/patient/seurat_obj_malignant_annotated2.qs"))
+  
+  # Clean up datasets before saving into seurat obj folder -----------------------------------
+  metadata_pat <- read_xlsx(file.path(base_dir, 'data/metadata/metadata_ST_EPN_Patient.xlsx'))
+  metadata_pat <- metadata_pat %>% filter(`sc/snRNAseq` %in% c('scRNA-seq', 'snRNA-seq'))
+  
+  # cleanup metadata and add metadata with patient info
+  seurat_obj_mal@meta.data[, c(18:24, 39:45)] <- NULL
+  colnames(metadata_pat) <- gsub('FileName', 'sample', colnames(metadata_pat))
+  seurat_obj_mal@meta.data <- left_join(seurat_obj_mal@meta.data, metadata_pat, by = 'sample')
+  
+  # bug in Seurat v5 (need to run this, otherwise error subsetting)
+  rownames(seurat_obj_mal@meta.data) <- Cells(seurat_obj_mal)
+  qsave(seurat_obj_mal, file.path(base_dir, "data/patient/seurat_obj_ST_malig_annotated.qs"))
+}
+
+
+
+# load NMF gene list of MPs
+markers_NMF <- readRDS(file.path(base_dir, 'data/signatures/nmf_marker_genes_final_annotated.rds'))
+names(markers_NMF) <- c("Neuroepithelial-like", "MES-like","Ependymal-like","Radial-glia-like","Cycling", "Embryonic-neuronal-like", "Neuronal-like", "Embryonic-like")
+write.xlsx(as.data.frame(markers_NMF), file.path(plot_dir, "1_NMF_marker_genes_top200.xlsx"))
+# select top 30
+markers_NMF_30 <- lapply(markers_NMF, head, 30)
+
+# load metadata
+metadata <- read_xlsx(file.path(base_dir, 'data/metadata/metadata_ST_EPN_Patient.xlsx'))
+metadata <- metadata %>% filter(`sc/snRNAseq` %in% c('scRNA-seq', 'snRNA-seq'))
+
+```
+
+
+
+# Find marker genes of each cell state (run both on cells annotated with cycling or no cycling MP)
+```{r marker genes}
+
+# Run on cells with cycling MP  ---------------------------------------
+Idents(seurat_obj_mal) <- 'Metaprogram'
+markers <- FindAllMarkers(seurat_obj_mal, 
+                               logfc.threshold = 0.5, 
+                               min.pct = 0.15, 
+                          only.pos = T)
+
+markers <- markers %>%
+    filter(p_val_adj < 0.05)
+write_xlsx(markers, file.path(plot_dir, '1_marker_genes_STEPN.xlsx'))
+
+# rerun on cells without cycling MP   ---------------------------------------
+Idents(seurat_obj_mal) <- 'Metaprogram_noCC'
+markers <- FindAllMarkers(seurat_obj_mal, 
+                               logfc.threshold = 0.5, 
+                               min.pct = 0.15, 
+                          only.pos = T)
+
+markers <- markers %>%
+    filter(p_val_adj < 0.05)
+write_xlsx(markers, file.path(plot_dir, '2_marker_genes_noCC_STEPN.xlsx'))
+```
+
+
+
+# UMAP Plot of samples
+
+## UMAP by subtype
+```{r UMAP subtype, fig.width = 5, fig.height = 4, fig.align="center"}
+DimPlot(object = seurat_obj_mal, 
+        reduction = 'umap', 
+        group.by = "Subtype", 
+        pt.size = 0.5, 
+        shuffle = TRUE, 
+        label = TRUE,
+        label.size = 0,
+        cols = col_subtype
+        ) + 
+  labs(title = 'ST-EPN', subtitle = paste0('n = ', dim(seurat_obj_mal)[2],' cells')) +
+  theme_tSNE
+ggsave(file.path(plot_dir, "4_umap_subtype.pdf"), width=5.5, height=4)
+
+```
+
+
+## UMAP by metaprogram
+```{r UMAP metaprogram, fig.width = 6, fig.height = 4, fig.align="center"}
+DimPlot(object = seurat_obj_mal, 
+        reduction = 'umap', 
+        group.by = "Metaprogram_noCC", 
+        pt.size = 0.5, 
+        shuffle = TRUE, 
+        label = TRUE,
+        label.size = 0,
+        cols = colors_metaprograms
+        ) + 
+  labs(title = 'ST-EPN', subtitle = paste0('n = ', dim(seurat_obj_mal)[2],' cells')) +
+  theme_tSNE
+ggsave(file.path(plot_dir, "5_umap_metaprogram.pdf"), width=6, height=4)
+
+```
+
+
+## UMAP by sample
+```{r UMAP sample, fig.width = 8, fig.height = 4, fig.align="center"}
+## UMAP By sample
+DimPlot(object = seurat_obj_mal, reduction = 'umap', group.by = "Sample_deID", label = FALSE, pt.size = 0.5, shuffle = TRUE, label.size = 0, cols = col_Sample_deID)+ 
+  labs(title = 'ST-EPN', subtitle = paste0('n = ', dim(seurat_obj_mal)[2],' cells')) +
+  theme_tSNE
+ggsave(file.path(plot_dir, '6_umap_sampleID.pdf'), width = 7.5, height = 4) 
+
+
+```
+
+
+
+# Dotplot marker genes
+
+## Marker of ependymal vs choroid genes
+```{r dotplot ependymal, fig.width = 4, fig.height = 2, fig.align="center"}
+Idents(seurat_obj_mal) <- 'type'
+## Dotplot markers 
+DotPlot(seurat_obj_mal,
+        features = c('FOXJ1', 'TTR'),
+        dot.scale = 6,
+        col.min = 0, 
+        #cols = c("grey90", "red3"),
+        scale = F, assay = 'RNA'
+) +  RotatedAxis()   +
+  paletteer::scale_colour_paletteer_c("viridis::mako", direction = -1) 
+ggsave(file.path(plot_dir, "7_Dotpot_FOXJ1_TTR.pdf"), width=4, height=2)
+
+```
+
+
+## Markers used for IF  (ZFTA-RELA tumors only)
+
+```{r dotplot markers I ZR, fig.width = 6, fig.height = 3, fig.align="center"}
+## subset to ZR tumors
+Idents(seurat_obj_mal) <- 'Subtype'
+seurat_sub <- subset(seurat_obj_mal, idents = 'ZFTA-RELA')
+
+Idents(seurat_sub) <- 'Metaprogram_noCC'
+# remove embryonic like program (only 27 cells, not representative)
+seurat_sub <- subset(seurat_sub, idents = 'Embryonic-like', invert = T)
+
+seurat_sub$Metaprogram_noCC <-factor(x = seurat_sub$Metaprogram_noCC , 
+                                     levels = c('MES/Hypoxia',  'Neuroepithelial-like' ,'Radial-glia-like' , 'Ependymal-like' ,  'Embryonic-neuronal-like', 'Neuronal-like'))
+
+DotPlot(seurat_sub,
+        features = c('VIM', 'NES',  'S100B', 'GFAP', "TUBB3", 'DCX'),
+        dot.scale = 6,
+        col.min = 0, 
+        group.by = 'Metaprogram_noCC',
+        scale = T, 
+        assay = 'RNA'
+) +  RotatedAxis()   +
+  paletteer::scale_colour_paletteer_c("viridis::mako", direction = -1) 
+ggsave(file.path(plot_dir, "9_Dotpot_IF_markers_ZR.pdf"), width=6, height=2.5)
+
+```
+
+# Barplot 
+
+## Barplot cell state composition across samples
+
+```{r barplot, fig.width = 12, fig.height = 6, fig.align="center"}
+## Bar plot
+
+# Read metadata file with patient information
+oncoprint_input_tumors <- metadata
+
+col_sampling <- c('Primary' = '#f7c297', 'Recurrence' = '#ffecb8', 'NA' = 'grey90')
+col_fusion <- c(paletteer::paletteer_d("miscpalettes::pastel")[c(5:11, 4)])
+names(col_fusion) <- unique(oncoprint_input_tumors$Fusion)
+
+desired_order <- c('ZFTA-RELA' ,'ZFTA-Cluster 1' , 'ZFTA-Cluster 2', 'ZFTA-Cluster 3', 'ZFTA-Cluster 4', 'ST-YAP1')
+
+# reorder metadata
+oncoprint_input_tumors <- oncoprint_input_tumors %>%
+  mutate(Subtype = factor(Subtype, levels = desired_order)) %>%  
+  arrange(Subtype) 
+
+oncoprint_input_tumors$Sample_deID <- factor(oncoprint_input_tumors$Sample_deID, levels = oncoprint_input_tumors$Sample_deID)
+seurat_obj_mal$Sample_deID <- factor(seurat_obj_mal$Sample_deID, levels = oncoprint_input_tumors$Sample_deID)
+
+  # plot barplot
+p1 <- plot_bar(seurat_obj_mal, seurat_obj_mal$Sample_deID, seurat_obj_mal$Metaprogram_noCC, colors_metaprograms) + 
+    guides(fill = guide_legend(title = 'Cell type')) + NoLegend() + theme(axis.text.x = element_blank())  +
+    scale_y_continuous(labels = scales::percent, expand = c(0,0)) 
+  
+  
+  # plot patient info 
+  p2 <- oncoprint_input_tumors %>%
+    ggplot(aes(x = Sample_deID, y = 1)) +
+    geom_tile(aes(fill = Subtype), colour = "white", width = 0.9, height = 0.9) +
+    scale_fill_manual(values = col_subtype , na.value = "grey95", guide = guide_legend(ncol = 2))  +
+    labs(y = 'Subtype') +
+  theme_oncoplot_no_legend 
+  
+p3 <- oncoprint_input_tumors %>%
+  ggplot(aes(x = Sample_deID, y = 1)) +
+  geom_tile(aes(fill = Fusion), colour = "white", width = 0.9, height = 0.9) +
+  scale_fill_manual(values = col_fusion , na.value = "grey95", guide = guide_legend(ncol = 2))  + 
+  theme_oncoplot_no_legend + 
+  labs(y = 'Fusion')
+
+p4 <- oncoprint_input_tumors %>%
+  ggplot(aes(x = Sample_deID, y = 1)) +
+  geom_tile(aes(fill = Sampling), colour = "white", width = 0.9, height = 0.9) +
+  scale_fill_manual(values = col_sampling , na.value = "grey95", guide = guide_legend(ncol = 2))  + 
+  labs(y = 'Source') +
+    scale_x_discrete(labels = oncoprint_input_tumors$Sample_deID) +
+    theme(panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          panel.background = element_blank(), 
+          axis.line = element_blank(),
+          axis.title.x=element_blank(),
+          axis.title.y=element_text(angle=0),
+          axis.text.x= element_text(color = 'black', size = 12, hjust=1, angle=90),
+          axis.text.y = element_blank(),
+          legend.position = "none",
+          axis.ticks=element_blank(),
+          plot.margin = unit(c(0, 0, 0, 0), "cm")) 
+
+
+plot_grid(p1, p2, p3, p4, align = "v", axis = "l", ncol = 1,
+            rel_heights = c(0.6,0.1, 0.1, 0.28))
+  ggsave(file.path(plot_dir, "10_Barplot_sample_Metaprogram_noCC.pdf"), width=14, height=5)
+
+
+```
+
+
+
+## Barplot primary vs recurrent tumor cell state composition
+
+```{r barplot subtype split , fig.width = 8, fig.height = 4, fig.align="center"}
+Idents(seurat_obj_mal) <- 'Sampling'
+seurat_obj_mal_sub <- subset(seurat_obj_mal, idents = c('Primary', 'Recurrence'))
+
+plot_bar(seurat_obj_mal_sub, seurat_obj_mal_sub$Sampling, seurat_obj_mal_sub$Metaprogram_noCC, col = colors_metaprograms) + facet_grid(.~Subtype)
+ggsave(file.path(plot_dir, "11_Barplot_Subtype_primary_vs_recurrence.pdf"), width=8, height=4)
+
+```
+
+## Create bar plot to compare differential cell state composition of primary vs recurrent tumors ZFTA-Cluster 3 tumors only
+
+```{r vlnpot subtype stats CL3, fig.width = 8, fig.height = 4, fig.align="center"}
+Idents(seurat_obj_mal) <- 'Subtype'
+seurat_obj_Z <- subset(seurat_obj_mal, idents = 'ZFTA-Cluster 3')
+
+boxplot <- boxplot_stat(seurat_obj_Z, grouping_var = 'sample', x_var = 'Sampling', y_var = 'Metaprogram_noCC',
+             split_var = 'Subtype',  col = colors_metaprograms, 
+             statistics = F, paired = F, hide_ns = T, p_adjust_method = NULL,  manual_bonferroni = T, number_cols_facet = 8)
+
+boxplot$plot
+ggsave(file.path(plot_dir, '12_Barplot_ZFTA-Cluster3_primary_vs_relapse.pdf'), width  = 12, height = 4)
+
+```
+
+
+
+
+## Create box  plot to compare differential cell state composition of primary vs recurrent tumors ZFTA-RELA tumors only
+
+```{r vlnpot subtype stats ZR , fig.width = 8, fig.height = 4, fig.align="center"}
+Idents(seurat_obj_mal) <- 'Subtype'
+seurat_obj_Z <- subset(seurat_obj_mal, idents = 'ZFTA-RELA')
+
+boxplot <- boxplot_stat(seurat_obj_Z, grouping_var = 'sample', x_var = 'Sampling', y_var = 'Metaprogram_noCC',
+             split_var = 'Subtype',  col = colors_metaprograms, 
+             statistics = F, paired = F, hide_ns = T, p_adjust_method = NULL, manual_bonferroni = T, number_cols_facet = 8)
+boxplot$plot
+ggsave(file.path(plot_dir, '13_Barplot_ZFTA-RELA_primary_vs_relapse.pdf'), width  = 12, height = 4)
+write.csv(boxplot$stats, file.path(plot_dir, '13b_Barplot_ZFTA-RELA_primary_vs_relapse_stat.csv'))
+write.csv(boxplot$shapiro, file.path(plot_dir, '13b_Barplot_ZFTA-RELA_primary_vs_relapse_shapiro.csv'))
+
+```
+
+## Barplot to compare cell state composition across different ST-EPN subtypes
+
+```{r vlnplot subtype composition, fig.width = 16, fig.height = 5, fig.align="center"}
+# Boxplot frequency across subtypes ------------------------------
+boxplot <- boxplot_stat(seurat_obj_mal, grouping_var = 'sample', x_var = 'Subtype', y_var = 'Metaprogram_noCC', 
+             split_var = NULL, statistics = T,
+             col = colors_metaprograms,  hide_ns = T, paired = F,
+             #custom_order = c('IHG', 'DMG', 'HGG', 'HGG-IDH'),
+               number_cols_facet = 7, p_adjust_method = 'BH')
+boxplot$plot
+ggsave(file.path(plot_dir, '14_Barplot_Subtype_statistics.pdf'), width  = 16, height = 5)
+write.csv(boxplot$stats, file.path(plot_dir, '14b_Barplot_Subtype_statistics_stats.csv'))
+write.csv(boxplot$shapiro, file.path(plot_dir, '14b_Barplot_Subtype_statistics_shapiro.csv'))
+
+```
+
+
+ 
+ 
+ 
+## Cycling barplots
+
+### cycling by metaprogram
+```{r barplot cycling no cycling, fig.width = 4, fig.height = 4, fig.align="center"}
+plot_bar_cellcycle(seurat_obj_mal, x_var = 'Metaprogram_noCC', col = c('red', 'black')) 
+ggsave(file.path(plot_dir, "16_Barplot_cycling_Metaprogram_noCC.pdf"), width=4, height=4)
+```
+
+
+
+## Cycling barplots (ZFTA-RELA only)
+
+### cycling by metaprogram 
+```{r barplot cycling stat zfta, fig.width = 4, fig.height = 4, fig.align="center"}
+Idents(seurat_obj_mal) <- 'Subtype'
+seurat_obj_sub <- subset(seurat_obj_mal, idents = 'ZFTA-RELA')
+
+plot_bar_cellcycle(seurat_obj_sub, x_var = 'Metaprogram_noCC', col = c('red', 'black')) 
+ggsave(file.path(plot_dir, "17_Barplot_ZFTARELA_only.pdf"), width=4, height=4)
+```
+
+
+
+
+
+# Hierarchy plot
+
+## By metaprogram
+```{r cellstate plot metaprogram, fig.width = 5.5, fig.height = 4, fig.align="center"}
+x1 = "Neuroepithelial-like_NMF"
+x2 = "Embryonic-like_NMF"
+y1 = "Neuronal-like_NMF"
+y2 = "Ependymal-like_NMF"
+
+group.by="Metaprogram"
+sample=seurat_obj_mal
+variables_to_retrieve <- c(x1, x2, y1,y2)
+
+# And store them as a tibble.
+scores <- sample@meta.data[, variables_to_retrieve]
+# Shuffle the cells so that we accomplish a random plotting, not sample by sample.
+
+# Compute Y axis values.
+d <- apply(scores, 1, function(x){max(x[c(x1, x2)]) - max(x[c(y1, y2)])})
+
+# Compute X axis values.
+x <- vapply(seq_along(d), function(x) {
+  if (d[x] > 0) {
+    d <- log2(abs(scores[x, x1] - scores[x, x2]) + 1)
+    ifelse(scores[x, x1] < scores[x, x2], d, -d)
+  } else {
+    d <- log2(abs(scores[x, y1] - scores[x, y2]) + 1)
+    ifelse(scores[x, y1] < scores[x, y2], d, -d)
+  }
+}, FUN.VALUE = numeric(1))
+
+names(x) <- rownames(scores)
+
+# Plot.
+df_E <- data.frame(row.names = rownames(scores))
+df_E[["set_x"]] <- x
+df_E[["set_y"]] <- d
+df_E[["group.by"]] <- sample@meta.data[, group.by]
+df_E[["subtype"]] <- seurat_obj_mal$Subtype
+
+ggplot(df_E,aes(x=set_x,
+              y=set_y,
+              col=group.by))+
+  geom_point(size=0.5)+
+  scale_color_manual(values=colors_metaprograms)+
+   theme_cellstate_plot + 
+  labs(x = 'Relative meta-module score', y = 'Relative meta-module score', title = 'ST-EPN cellular hierarchy', subtitle = paste0('n = ', dim(seurat_obj_mal)[2],' cells')) +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") 
+
+ggsave(file.path(plot_dir, "19_CellState_plot_4way_Metaprograms.pdf"), width=6.5, height=4)
+
+```
+
+
+## By cycling properties
+```{r cellstate plot cycling, fig.width = 5.5, fig.height = 4, fig.align="center"}
+x1 = "Neuroepithelial-like_NMF"
+x2 = "Embryonic-like_NMF"
+y1 = "Neuronal-like_NMF"
+y2 = "Ependymal-like_NMF"
+
+group.by="Cycling_prop"
+sample=seurat_obj_mal
+variables_to_retrieve <- c(x1, x2, y1,y2)
+
+# And store them as a tibble.
+scores <- sample@meta.data[, variables_to_retrieve]
+# Shuffle the cells so that we accomplish a random plotting, not sample by sample.
+
+# Compute Y axis values.
+d <- apply(scores, 1, function(x){max(x[c(x1, x2)]) - max(x[c(y1, y2)])})
+
+# Compute X axis values.
+x <- vapply(seq_along(d), function(x) {
+  if (d[x] > 0) {
+    d <- log2(abs(scores[x, x1] - scores[x, x2]) + 1)
+    ifelse(scores[x, x1] < scores[x, x2], d, -d)
+  } else {
+    d <- log2(abs(scores[x, y1] - scores[x, y2]) + 1)
+    ifelse(scores[x, y1] < scores[x, y2], d, -d)
+  }
+}, FUN.VALUE = numeric(1))
+
+names(x) <- rownames(scores)
+
+# Define titles for the axis.
+x_lab1 <- paste0(y1, "  <---->  ", y2)
+x_lab2 <- paste0(x1, "  <---->  ", x2)
+y_lab1 <- paste0(y1, "  <---->  ", x1)
+y_lab2 <- paste0(x2, "  <---->  ", y2)
+
+
+# Plot.
+df_E <- data.frame(row.names = rownames(scores))
+df_E[["set_x"]] <- x
+df_E[["set_y"]] <- d
+df_E[["group.by"]] <- sample@meta.data[, group.by]
+df_E[["subtype"]] <- seurat_obj_mal$Subtype
+
+colors.use=c("black", 'red')
+names(colors.use) = c("Non-cycling", 'Cycling')
+
+
+samples = unique(df_E$group.by)
+samples = c("Non-cycling", 'Cycling')
+
+# add pie charts
+piechart_df <- df_E %>%
+  dplyr::mutate(
+    quadrant = case_when(
+      set_x >= 0 & set_y >= 0 ~ "Q1 (x>0, y>0)",
+      set_x < 0 & set_y > 0 ~ "Q2 (x<0, y>0)",
+      set_x < 0 & set_y < 0 ~ "Q3 (x<0, y<0)",
+      set_x > 0 & set_y < 0 ~ "Q4 (x>0, y<0)"
+    )
+  ) %>%
+  group_by(quadrant, group.by) %>%
+     summarise(n = n()) %>%
+    mutate(freq = n / sum(n)) 
+
+
+
+ggplot(df_E,aes(x=set_x,
+              y=set_y,
+              col=group.by))+
+  geom_point(size=0.5)+
+  scale_color_manual(values=colors.use)+
+   theme_cellstate_plot + 
+  labs(x = 'Relative meta-module score', y = 'Relative meta-module score', title = 'ST-EPN cellular hierarchy', subtitle = paste0('n = ', dim(seurat_obj_mal)[2],' cells')) +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") 
+
+ggsave(file.path(plot_dir, "20_CellState_plot_4way_cycling.pdf"), width=5.5, height=4)
+```
+
+
+
+## By subtype
+
+```{r cellstate plot subtype, fig.width = 5.5, fig.height = 4, fig.align="center"}
+x1 = "Neuroepithelial-like_NMF"
+x2 = "Embryonic-like_NMF"
+y1 = "Neuronal-like_NMF"
+y2 = "Ependymal-like_NMF"
+
+group.by="Subtype"
+sample=seurat_obj_mal
+variables_to_retrieve <- c(x1, x2, y1,y2)
+
+# And store them as a tibble.
+scores <- sample@meta.data[, variables_to_retrieve]
+# Shuffle the cells so that we accomplish a random plotting, not sample by sample.
+
+# Compute Y axis values.
+d <- apply(scores, 1, function(x){max(x[c(x1, x2)]) - max(x[c(y1, y2)])})
+
+# Compute X axis values.
+x <- vapply(seq_along(d), function(x) {
+  if (d[x] > 0) {
+    d <- log2(abs(scores[x, x1] - scores[x, x2]) + 1)
+    ifelse(scores[x, x1] < scores[x, x2], d, -d)
+  } else {
+    d <- log2(abs(scores[x, y1] - scores[x, y2]) + 1)
+    ifelse(scores[x, y1] < scores[x, y2], d, -d)
+  }
+}, FUN.VALUE = numeric(1))
+
+names(x) <- rownames(scores)
+
+# Define titles for the axis.
+x_lab1 <- paste0(y1, "  <---->  ", y2)
+x_lab2 <- paste0(x1, "  <---->  ", x2)
+y_lab1 <- paste0(y1, "  <---->  ", x1)
+y_lab2 <- paste0(x2, "  <---->  ", y2)
+
+
+# Plot.
+df_E <- data.frame(row.names = rownames(scores))
+df_E[["set_x"]] <- x
+df_E[["set_y"]] <- d
+df_E[["group.by"]] <- sample@meta.data[, group.by]
+df_E[["subtype"]] <- seurat_obj_mal$Subtype
+
+colors.use=c("#B44672","#B47846","#46B478","#46B4AF","#4682B4","#B4AF46")
+names(colors.use) = c("ZFTA-RELA","ZFTA-Cluster 1","ZFTA-Cluster 2","ZFTA-Cluster 3","ZFTA-Cluster 4","ST-YAP1")
+
+
+samples = unique(df_E$group.by)
+samples = c("ZFTA-RELA","ZFTA-Cluster 1","ZFTA-Cluster 2","ZFTA-Cluster 3","ZFTA-Cluster 4", "ST-YAP1")
+
+for (i in 1:length(samples)) {
+  tmp <- df_E$group.by==samples[i]
+  tmp <- gsub("TRUE",samples[i],tmp)
+  tmp <- gsub("FALSE","Other",tmp)
+  df_E <- cbind(df_E,tmp)
+}
+subtypes <- c("ZFTA-RELA","ZFTA-Cluster 1","ZFTA-Cluster 2","ZFTA-Cluster 3","ZFTA-Cluster 4", "ST-YAP1")
+colnames(df_E)[5:10] <- subtypes
+
+ggplot(df_E,aes(x=set_x,
+              y=set_y,
+              col=group.by))+
+  geom_point(size=0.5)+
+  scale_color_manual(values=colors.use)+
+   theme_cellstate_plot + 
+  labs(x = 'Relative meta-module score', y = 'Relative meta-module score', title = 'ST-EPN cellular hierarchy', subtitle = paste0('n = ', dim(seurat_obj_mal)[2],' cells')) +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") 
+
+ggsave(file.path(plot_dir, "22_CellState_plot_4way_subtype.pdf"), width=5.5, height=4)
+```
+
+## Split by subtype
+
+```{r cellstate , fig.width = 10, fig.height = 8, fig.align="center"}
+
+p1 <- ggplot(df_E %>% 
+  dplyr::arrange(`ZFTA-RELA`))+
+  geom_point(aes(x=set_x, y=set_y,color=`ZFTA-RELA`),size=1)+
+  scale_colour_manual(values=c('grey90', "#B44672"), name="")+
+ theme_cellstate_plot + 
+  labs( title = 'ZFTA-RELA') +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") + 
+    #scale_x_continuous(limits = c(-0.7, 1)) + 
+    #scale_y_continuous(limits = c(-1.2, 1.5)) +
+  theme(axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  axis.text.x = element_blank(),
+  axis.text.y = element_blank(),
+  axis.ticks = element_blank()) +
+  theme(legend.direction="horizontal",legend.position="bottom")
+
+p2 <- ggplot(df_E %>% 
+  dplyr::arrange(`ZFTA-Cluster 1`))+
+  geom_point(aes(x=set_x, y=set_y,color=`ZFTA-Cluster 1`),size=1)+
+  scale_colour_manual(values=c('grey90', "#B47846"), name="")+
+ theme_cellstate_plot + 
+  labs(title = 'ZFTA-Cluster 1') +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") + 
+    #scale_x_continuous(limits = c(-0.7, 1)) + 
+    #scale_y_continuous(limits = c(-1.2, 1.5)) +
+  theme(axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  axis.text.x = element_blank(),
+  axis.text.y = element_blank(),
+  axis.ticks = element_blank())+
+  theme(legend.direction="horizontal",legend.position="bottom")
+
+p3 <- ggplot(df_E %>% 
+  dplyr::arrange(`ZFTA-Cluster 2`))+
+  geom_point(aes(x=set_x, y=set_y,color=`ZFTA-Cluster 2`),size=1)+
+  scale_colour_manual(values=c('grey90', "#46B478"), name="")+
+ theme_cellstate_plot + 
+  labs(title = 'ZFTA-Cluster 2') +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") + 
+    #scale_x_continuous(limits = c(-0.7, 1)) + 
+    #scale_y_continuous(limits = c(-1.2, 1.5)) +
+  theme(axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  axis.text.x = element_blank(),
+  axis.text.y = element_blank(),
+  axis.ticks = element_blank())+
+  theme(legend.direction="horizontal",legend.position="bottom")
+  
+p4 <- ggplot(df_E %>% 
+  dplyr::arrange(`ZFTA-Cluster 3`))+
+  geom_point(aes(x=set_x, y=set_y,color=`ZFTA-Cluster 3`),size=1)+
+  scale_colour_manual(values=c('grey90', "#46B4AF"), name="")+
+ theme_cellstate_plot + 
+  labs(title = 'ZFTA-Cluster 3') +
+    geom_vline(xintercept = 0, linetype="dotted") +
+    #scale_x_continuous(limits = c(-0.7, 1)) + 
+    #scale_y_continuous(limits = c(-1.2, 1.5)) +
+  theme(axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  axis.text.x = element_blank(),
+  axis.text.y = element_blank(),
+  axis.ticks = element_blank())+
+  theme(legend.direction="horizontal",legend.position="bottom")
+
+p5 <- ggplot(df_E %>% 
+  dplyr::arrange(`ZFTA-Cluster 4`))+
+  geom_point(aes(x=set_x, y=set_y,color=`ZFTA-Cluster 4`),size=1)+
+  scale_colour_manual(values=c('grey90', "#4682B4"), name="")+
+ theme_cellstate_plot + 
+  labs(title = 'ZFTA-Cluster 4') +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") + 
+     #scale_x_continuous(limits = c(-0.6, 1)) + 
+    #scale_y_continuous(limits = c(-1.2, 1.5)) +
+  theme(axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  axis.text.x = element_blank(),
+  axis.text.y = element_blank(),
+  axis.ticks = element_blank())+
+  theme(legend.direction="horizontal",legend.position="bottom")
+
+p6 <- ggplot(df_E %>% 
+  dplyr::arrange(`ST-YAP1`))+
+  geom_point(aes(x=set_x, y=set_y,color=`ST-YAP1`),size=1)+
+  scale_colour_manual(values=c('grey90', "#B4AF46"), name="")+
+ theme_cellstate_plot + 
+  labs(title = 'ST-YAP1') +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") + 
+    #scale_x_continuous(limits = c(-0.7, 1)) + 
+    #scale_y_continuous(limits = c(-1.2, 1.5)) +
+  theme(axis.title.x = element_blank(),
+  axis.title.y = element_blank(),
+  axis.text.x = element_blank(),
+  axis.text.y = element_blank(),
+  axis.ticks = element_blank())+
+  theme(legend.direction="horizontal",legend.position="bottom")
+
+
+plot_grid(p1, p2, p3, p4, p5, p6, ncol = 3)
+ggsave(file.path(plot_dir, "23_CellState_plot_4way_Subtype_split.pdf"), width=10, height=8)
+
+
+
+```
+
+
+
+## Plot distribution of marker genes on the hierarchy plot
+```{r cellstate  plot genes, fig.width = 12, fig.height = 3, fig.align="center"}
+x1 = "Neuroepithelial-like_NMF"
+x2 = "Embryonic-like_NMF"
+y1 = "Neuronal-like_NMF"
+y2 = "Ependymal-like_NMF"
+
+group.by="Subtype"
+sample=seurat_obj_mal
+variables_to_retrieve <- c(x1, x2, y1,y2)
+
+# And store them as a tibble.
+scores <- sample@meta.data[, variables_to_retrieve]
+# Shuffle the cells so that we accomplish a random plotting, not sample by sample.
+
+# Compute Y axis values.
+d <- apply(scores, 1, function(x){max(x[c(x1, x2)]) - max(x[c(y1, y2)])})
+
+# Compute X axis values.
+x <- vapply(seq_along(d), function(x) {
+  if (d[x] > 0) {
+    d <- log2(abs(scores[x, x1] - scores[x, x2]) + 1)
+    ifelse(scores[x, x1] < scores[x, x2], d, -d)
+  } else {
+    d <- log2(abs(scores[x, y1] - scores[x, y2]) + 1)
+    ifelse(scores[x, y1] < scores[x, y2], d, -d)
+  }
+}, FUN.VALUE = numeric(1))
+
+names(x) <- rownames(scores)
+
+# Define titles for the axis.
+x_lab1 <- paste0(y1, "  <---->  ", y2)
+x_lab2 <- paste0(x1, "  <---->  ", x2)
+y_lab1 <- paste0(y1, "  <---->  ", x1)
+y_lab2 <- paste0(x2, "  <---->  ", y2)
+
+
+# Plot.
+df_E <- data.frame(row.names = rownames(scores))
+df_E[["set_x"]] <- x
+df_E[["set_y"]] <- d
+df_E[["group.by"]] <- sample@meta.data[, group.by]
+df_E[["subtype"]] <- seurat_obj_mal$Subtype
+
+
+# Plot distribution of markers
+  genes <- c('VIM', 'NES', 'GFAP', 'S100B', "TUBB3", 'DCX')
+  names(genes) <- c('VIM', 'NES', 'GFAP', 'S100B', "TUBB3", 'DCX')
+  marker_genes <- FetchData(seurat_obj_mal, genes) 
+  df_E <- cbind(df_E, marker_genes)
+  
+  
+ df_E <- df_E %>%
+  sample_frac(1)
+ 
+ plot_list <- list()
+  for (col in names(genes)) {
+    df_E %>% dplyr::arrange(.data[[col]])
+     plot <- ggplot((df_E), aes(x = set_x, y = set_y)) +
+      geom_point(aes(col = .data[[col]]), size = 0.1) +
+      paletteer::scale_colour_paletteer_c("viridis::mako", direction = -1) +
+     theme_cellstate_plot +
+        labs(x = 'Relative meta-module score', y = 'Relative meta-module score', title = 'ST-EPN cellular hierarchy', subtitle = paste0('n = ', dim(seurat_obj_mal)[2],' cells')) +
+     # remove legend
+      guides(color = FALSE) +
+      ggtitle(paste(names(genes[col])))  # Add title 
+   
+      plot_list[[col]] <- plot 
+
+  }
+
+
+  # dplyr::arrange plots together
+  plot_grid(plotlist = plot_list, ncol = 6) 
+  ggsave(file.path(plot_dir, "24_CellState_4way_plot_markers.pdf"), width=18, height=3)
+  
+```
+
+
+
+## Cell state plot after pseudo-bulking
+
+
+Plot hierachy plot of pseudo-bulk expression
+```{r aggregate cell state plot, fig.width = 5, fig.height = 3, fig.align="center"}
+x1 = "Neuroepithelial-like_NMF"
+x2 = "Embryonic-like_NMF"
+y1 = "Neuronal-like_NMF"
+y2 = "Ependymal-like_NMF"
+
+metadata_aggreagate <- seurat_obj_mal@meta.data %>%
+  group_by(Sample_deID) %>%
+  summarise(Subtype = unique(Subtype),
+            `Neuroepithelial-like_NMF` = mean(`Neuroepithelial-like_NMF`),
+            `Embryonic-like_NMF` = mean(`Embryonic-like_NMF`),
+            `Neuronal-like_NMF` = mean(`Neuronal-like_NMF`),
+            `Ependymal-like_NMF` = mean(`Ependymal-like_NMF`))
+  
+
+seurat_obj.pseudobulk <- AggregateExpression(seurat_obj_mal, assays = "RNA", return.seurat = T, group.by = c("Sample_deID"))
+seurat_obj.pseudobulk <- AddMetaData(seurat_obj.pseudobulk, metadata_aggreagate)
+group.by="Subtype"
+sample=seurat_obj.pseudobulk
+variables_to_retrieve <- c(x1, x2, y1,y2)
+
+# And store them as a tibble.
+scores <- sample@meta.data[, variables_to_retrieve]
+# Shuffle the cells so that we accomplish a random plotting, not sample by sample.
+
+# Compute Y axis values.
+d <- apply(scores, 1, function(x){max(x[c(x1, x2)]) - max(x[c(y1, y2)])})
+
+# Compute X axis values.
+x <- vapply(seq_along(d), function(x) {
+  if (d[x] > 0) {
+    d <- log2(abs(scores[x, x1] - scores[x, x2]) + 1)
+    ifelse(scores[x, x1] < scores[x, x2], d, -d)
+  } else {
+    d <- log2(abs(scores[x, y1] - scores[x, y2]) + 1)
+    ifelse(scores[x, y1] < scores[x, y2], d, -d)
+  }
+}, FUN.VALUE = numeric(1))
+
+names(x) <- rownames(scores)
+
+# Define titles for the axis.
+x_lab1 <- paste0(y1, "  <---->  ", y2)
+x_lab2 <- paste0(x1, "  <---->  ", x2)
+y_lab1 <- paste0(y1, "  <---->  ", x1)
+y_lab2 <- paste0(x2, "  <---->  ", y2)
+
+
+# Plot.
+df_E <- data.frame(row.names = rownames(scores))
+df_E[["set_x"]] <- x
+df_E[["set_y"]] <- d
+df_E[["group.by"]] <- sample@meta.data[, group.by]
+df_E[["subtype"]] <- seurat_obj.pseudobulk$Subtype
+
+colors.use=c("#B44672","#B47846","#46B478","#46B4AF","#4682B4","#B4AF46")
+names(colors.use) = c("ZFTA-RELA","ZFTA-Cluster 1","ZFTA-Cluster 2","ZFTA-Cluster 3","ZFTA-Cluster 4","ST-YAP1")
+
+
+samples = unique(df_E$group.by)
+samples = c("ZFTA-RELA","ZFTA-Cluster 1","ZFTA-Cluster 2","ZFTA-Cluster 3","ZFTA-Cluster 4", "ST-YAP1")
+
+for (i in 1:length(samples)) {
+  tmp <- df_E$group.by==samples[i]
+  tmp <- gsub("TRUE",samples[i],tmp)
+  tmp <- gsub("FALSE","Other",tmp)
+  df_E <- cbind(df_E,tmp)
+}
+subtypes <- c("ZFTA-RELA","ZFTA-Cluster 1","ZFTA-Cluster 2","ZFTA-Cluster 3","ZFTA-Cluster 4", "ST-YAP1")
+colnames(df_E)[5:10] <- subtypes
+
+ggplot(df_E,aes(x=set_x,
+              y=set_y,
+              col=group.by))+
+  geom_point(size=3)+
+  scale_color_manual(values=colors.use)+
+   theme_cellstate_plot + 
+  labs(x = 'Relative meta-module score', y = 'Relative meta-module score', title = 'ST-EPN cellular hierarchy', subtitle = paste0('n = ', dim(seurat_obj.pseudobulk)[2],' samples')) +
+    geom_vline(xintercept = 0, linetype="dotted") + geom_hline(yintercept = 0, linetype="dotted") 
+ggsave(file.path(plot_dir, "25_CellState_plot_4way_pseudobulk.pdf"), width=5.5, height=4)
+
+```
+
+
+
+# Correlation matrix with previous EPN signature genes (Gojo et al 2020)
+```{r correlation, fig.width = 5.5, fig.height = 4, fig.align="center"}
+# Correlation matrix ----------------------------------- 
+
+# load Gojo et al. markers
+ref_markers_Gojo <- read_csv(file.path(resource_dir, 'TableS2_epn2020Paper_Metaprograms_Merged.csv'))   
+ref_markers_Gojo <- as.list(ref_markers_Gojo)
+ref_markers_Gojo <- sapply(ref_markers_Gojo, function(x) x[!is.na(x)], simplify = FALSE)
+
+
+# load NMF markers identified in this dataset
+markers_NMF <- markers_NMF_30
+names(markers_NMF) <- paste0('STEPN-', names(markers_NMF))
+
+## create count matrix
+cm <- seurat_obj_mal[["RNA"]]$counts
+cm_norm <- as.matrix(log2(cm/10+1))
+cm_mean <- log2(Matrix::rowMeans(cm)+1)
+cm_center <- cm_norm - rowMeans(cm_norm)
+
+## calculate correlation
+scores <- scoreNmfGenes(cm_center, cm_mean, c(ref_markers_Gojo, markers_NMF))
+scores <- t(scores)
+scores_cor <- cor(scores)
+hc_res <- hclust(dist(1-scores_cor), method = "ward.D2")
+
+mat <- scores_cor[hc_res$order, hc_res$order]
+
+fontcolors <- ifelse(grepl('STEPN-', rownames(mat)), 'red', 'black')
+fontfaces <- ifelse(grepl('STEPN-', rownames(mat)), 'bold', 'plain')
+
+library(ComplexHeatmap)
+rowAnno <- rowAnnotation(rows = anno_text(rownames(mat), gp = gpar(fontface = fontfaces, col = fontcolors)))
+
+ht <- pheatmap::pheatmap(mat, 
+                         color = colorRampPalette(rev(brewer.pal(9, "RdBu"))[3:9])(100),
+                         cluster_rows = F, cluster_cols = F, show_rownames = T, show_colnames = F, silent = T)
+ht$gtable$grobs[[2]]$gp <- gpar(col = fontcolors, fontface = fontfaces)
+
+pdf(file.path(plot_dir, '26_Correlation.pdf'), width = 9, height = 6)
+print(ht)
+invisible(dev.off())
+
+
+```

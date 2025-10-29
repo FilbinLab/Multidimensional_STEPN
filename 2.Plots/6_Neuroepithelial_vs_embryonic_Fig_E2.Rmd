@@ -1,0 +1,326 @@
+---
+title: "Plots of ST-EPN programs - neuroepithelial vs embryonic"
+author: "Sara Danielli"
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+---
+
+```{r, setup, include = FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = TRUE, cache = TRUE, warning = FALSE, comment = FALSE)
+```
+
+```{r preparation environment, message=FALSE, warning=FALSE, results='hide'}
+# Load packages -----------------------------------
+library(tidyverse)
+library(ggpubr)
+library(dplyr)
+library(Seurat)
+library(ggplot2)
+library(paletteer)
+library(readxl)
+library(writexl)
+library(qs)
+library(ggrastr)
+library(cowplot)
+library(openxlsx)
+library(patchwork)
+library(SingleR)
+library(celldex)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(msigdbr)
+
+# Organize environment  -----------------------------------
+base_dir <- "/Users/sdaniell/Partners HealthCare Dropbox/Sara Danielli/Sara Danielli/Project/Ependymoma/11 - Plots scRNAseq"
+
+data_dir <- file.path(base_dir, "data")
+analysis_dir <- file.path(base_dir, 'analysis')
+plot_dir <- file.path(analysis_dir, "plots/STEPN/malignant/neuroepithelial_vs_malignant")
+if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
+
+
+resource_dir <- file.path(base_dir, "scripts/resources")
+source(file.path(resource_dir, "Plot_style_v2.R"))
+source(file.path(resource_dir, "NMF_helper_function.R")) 
+source(file.path(resource_dir, 'single_cell_preprocessing_helper_functions_CBJr.R'))
+
+
+# Define color palettes  -----------------------------------
+col_subtype = c('ZFTA-RELA' = "#B44672",'ZFTA-Cluster 1' = "#B47846", 'ZFTA-Cluster 2' = "#46B478",
+                'ZFTA-Cluster 3' = "#46B4AF", 'ZFTA-Cluster 4' = "#4682B4",'ST-YAP1' = "#B4AF46")
+
+colors_metaprograms<- c("gray30","#F99E93FF","#9E5E9BFF","#74ADD1FF",'#0F4F8B', "#ACD39EFF","#96410EFF", 'mistyrose1')
+
+names(colors_metaprograms) <- c("Cycling", "Neuroepithelial-like", "Radial-glia-like", 
+                          "Embryonic-neuronal-like", "Neuronal-like" ,"Ependymal-like", "MES-like", "Embryonic-like")
+
+
+
+# load in data -----------------------------------
+# load seurat objects
+seurat_obj_mal <- qread(file = file.path(base_dir, "data/patient/seurat_obj_malignant_annotated2.qs"))
+
+
+# load NMF gene list
+markers_NMF <- readRDS(file.path(base_dir, 'data/signatures/nmf_marker_genes_final_annotated.rds'))
+names(markers_NMF) <- c("Neuroepithelial-like", "MES-like","Ependymal-like","Radial-glia-like","Cycling", "Embryonic-neuronal-like", "Neuronal-like", "Embryonic-like")
+markers_NMF_200 <- readRDS(file.path(base_dir, 'data/signatures/nmf_marker_genes_final_annotated_200.rds'))
+write.xlsx(as.data.frame(markers_NMF), file.path(plot_dir, "1_NMF_marker_genes_top200.xlsx"))
+# select top 30
+markers_NMF_30 <- lapply(markers_NMF, head, 30)
+
+# load metadata
+metadata <- read_xlsx(file.path(base_dir, 'data/metadata/metadata_ST_EPN_Patient.xlsx'))
+metadata <- metadata %>% filter(`sc/snRNAseq` %in% c('scRNA-seq', 'snRNA-seq'))
+
+```
+
+
+
+
+# Find marker genes neueroepithelial vs embryonic
+```{r DEG}
+# Find Markers -----------------------------------
+Idents(seurat_obj_mal) <- 'Metaprogram'
+seurat_obj_mal <- subset(seurat_obj_mal, idents = c('Neuroepithelial-like', 'Embryonic-like'))
+
+markers <- RunPrestoAll(
+  seurat_obj_mal,
+  #test.use = "MAST",
+  logfc.threshold = 0.05,
+  min.pct = 0.15,
+  verbose = TRUE)
+write.csv(markers, file.path(plot_dir, "1_markers_embryonic_vs_neuroepi.csv"))
+ 
+# filter for only one of the two populations (the genes are the same but with different directions of FC) 
+  markers2 <- markers %>% 
+    filter(cluster %in% c("Embryonic-like")) %>%
+    filter(p_val_adj < 0.05) %>%
+    group_by(cluster) %>%
+    arrange(-avg_log2FC, .by_group = T)
+```
+
+### Exploring the differentially expressed genes
+
+```{r volcano, fig.width =6, fig.height = 4, fig.align="center"}
+ # Plot volcano plot of DEGs colored by significance
+   # create new column that contains the information about whether a gene is above FC and below P signif.
+   markers2 <- markers2 %>%
+     mutate(
+       color = case_when(
+         avg_log2FC > 1 & p_val_adj < 1e-05 ~ 'Embryonic-like',
+         avg_log2FC < -1 & p_val_adj < 1e-05 ~ 'Neuroepithelial-like'
+       )
+     )
+   
+ col_volcano <- c( 'grey90', colors_metaprograms[['Embryonic-like']], colors_metaprograms[["Neuroepithelial-like"]])
+ names(col_volcano) <- c('NA', 'Embryonic-like', "Neuroepithelial-like")
+ 
+ ggplot(markers2, aes(avg_log2FC, -log(p_val_adj,10))) +
+   geom_point(aes(color = ifelse(is.na(color), "NA", color))) +
+   xlab(expression("Log"[2]*" fold change")) + 
+   ylab(expression("-log"[10]*"P")) +
+   geom_text_repel(data = subset(markers2, !is.na(color)), 
+                   aes(label = gene), box.padding = 0.2,
+                   point.padding = 0.2, segment.alpha = 1, size = 3) +
+   xlab(expression("Log"[2]*"fold change")) + 
+   scale_color_manual(values = col_volcano) +  
+   geom_vline(xintercept = -1, linetype="dotted") + 
+   geom_vline(xintercept = 1, linetype="dotted") + 
+   geom_hline(yintercept = -log(1e-05,10), linetype="dotted") + 
+   theme_cellstate_plot +
+  # xlim(c(-6, 6)) +
+   labs(color = 'Upregulated in')
+  ggsave(file.path(plot_dir, "2_Volcano_plot.pdf"), width=6, height=4)
+
+```
+### Export differentially expressed gene results
+
+```{r DEG, fig.width =6, fig.height = 4, fig.align="center"}
+# genes upregulated in embryonic vs neuroepithelial
+embryonic_vs_neuroepithelial <- markers2 |>
+  # Positive fold changes
+ # dplyr::filter(avg_log2FC > 1) |>
+  # Significant p values
+  dplyr::filter(p_val_adj < 1e-05) 
+embryonic_vs_neuroepithelial
+
+# export genes that are stat sig
+write.csv(embryonic_vs_neuroepithelial, file.path(plot_dir, '3_embryonic_vs_neuroepithelial_P1e05.csv'))
+
+   
+
+```
+
+
+# Perform GO analysis  --------------------------------
+
+```{r GO up, fig.width =6, fig.height = 4, fig.align="center"}
+## GO of markers upregulated in embryonic -----------------
+
+markers_em <- markers2 |>
+  # Positive fold changes
+  dplyr::filter(avg_log2FC > 1) |>
+  # Significant p values
+  dplyr::filter(p_val_adj < 1e-05) |>
+  # Take the "top 500" when ordering by FC
+  dplyr::slice_min(order_by = -avg_log2FC, n = 500) |>
+  # Extract a vector of the gene symbols
+  dplyr::pull(gene)
+
+    
+go_ora_results_em <- enrichGO(gene = markers_em, 
+                           ont = "ALL", 
+                           keyType = "SYMBOL", 
+                           universe = markers2$gene,
+                           minGSSize = 3, 
+                           maxGSSize = 800,
+                           pvalueCutoff = 0.05, 
+                           OrgDb = org.Hs.eg.db, 
+                           pAdjustMethod = "BH")
+    
+  if (!is.null(go_ora_results_em)) {
+    go_result_df <- data.frame(go_ora_results_em@result)
+    write.csv(go_result_df, file.path(plot_dir, "4_enrichGO_embryonic_vs_neuroepithelial.csv"))
+  } else {
+    paste('No significant enrichment found in upregulated genes')
+  }
+    
+
+
+
+## GO of markers upregulated in neuroepithelial -----------------
+  markers_ne <- markers2 |>
+  # Positive fold changes
+  dplyr::filter(avg_log2FC < -1) |>
+  # Significant p values
+  dplyr::filter(p_val_adj < 1e-05) |>
+  # Take the "top 500" when ordering by FC
+  dplyr::slice_min(order_by = avg_log2FC, n = 500) |>
+  # Extract a vector of the gene symbols
+  dplyr::pull(gene)
+
+    
+go_ora_results_ne <- enrichGO(gene = markers_ne, 
+                           ont = "ALL", 
+                           keyType = "SYMBOL", 
+                           universe = markers2$gene,
+                           minGSSize = 3, 
+                           maxGSSize = 800,
+                           pvalueCutoff = 0.05, 
+                           OrgDb = org.Hs.eg.db, 
+                           pAdjustMethod = "BH")
+    
+  if (!is.null(go_ora_results_ne)) {
+    go_result_df <- data.frame(go_ora_results_ne@result)
+    write.csv(go_result_df, file.path(plot_dir, "5_enrichGO_neuroepithelial_vs_embryonic.csv"))
+  } else {
+    paste('No significant enrichment found in upregulated genes')
+  }
+    
+
+
+# GO of both upregulated in embryonic and neuroepithelial -----------------------------
+    # Check if at least one result object is not NULL
+    if (!is.null(go_ora_results_em) || !is.null(go_ora_results_ne)) {
+      
+      # Initialize a list to store non-empty results
+      mlist <- list()
+      
+      if (!is.null(go_ora_results_em)) {
+        mlist[["Neuroepithelial"]] <- go_ora_results_ne
+      }
+      
+      if (!is.null(go_ora_results_ne)) {
+        mlist[["Embryonic"]] <- go_ora_results_em      }
+      
+      # Proceed with merging and plotting if the list is not empty
+      if (length(mlist) > 0) {
+        mresult <- merge_result(mlist)
+        dotplot_GO <- dotplot(mresult, showCategory = 10) +
+          theme(plot.title = element_text(hjust=0.5, face="bold")) #+ theme_PCplot
+      ggsave(file.path(plot_dir, "6_enrichGO_top10.pdf"), width=6, height=8)
+
+      }
+    }
+
+```
+
+# Perform GSEA analysis  --------------------------------
+
+```{r GSEA, fig.width =6, fig.height = 4, fig.align="center"}
+
+ # Gene set enrichment analysis --------------------------------------
+    hs_cell_type_df <- msigdbr(species = "Homo sapiens",
+                               category = "C5")
+    
+    
+    input_file <-  markers2 |>
+  # Significant p values
+  dplyr::filter(p_val_adj < 1e-05)
+    
+    output_file <- file.path(plot_dir,
+                             "7_GSEA_embryonic_vs_neuroepithelial.tsv")
+
+    
+    sum(duplicated(input_file$gene))
+    
+    lfc_vector <- input_file |>
+      # Extract a vector of `summary.logFC` named by `gene_symbol`
+      dplyr::pull(avg_log2FC, name = gene)
+    
+    lfc_vector <- sort(lfc_vector, decreasing = TRUE)
+    
+    gse <- gseGO(geneList = lfc_vector, 
+                 ont = "ALL", 
+                 keyType = "SYMBOL", 
+                 #nPerm = 10000, 
+                 minGSSize = 3, 
+                 maxGSSize = 800, 
+                 pvalueCutoff = 0.05, 
+                 verbose = TRUE, 
+                 OrgDb = org.Hs.eg.db, 
+                 pAdjustMethod = "BH"
+    )
+    
+    
+    # write results
+    gse@result |> readr::write_tsv(output_file)
+    
+    
+    # Dynamically get the top and bottom terms by NES
+    top_bottom_terms <- gse@result %>%
+      dplyr::arrange(desc(NES)) %>%
+      dplyr::mutate(row_num = row_number()) %>%
+      dplyr::filter(
+        row_num <= min(10, n()) | row_num > max(n() - 10, 0)
+      ) %>%
+      dplyr::mutate(color_group = ifelse(NES > 0, "Embryonic-like", "Neuroepithelial-like")) %>%
+      dplyr::select(-row_num)
+    
+    
+    ## Plot barplot with sign of FC
+    ggplot(top_bottom_terms, aes(NES, fct_reorder(Description, NES), fill=color_group), showCategory=20) + 
+      geom_col(orientation='y') + 
+      scale_fill_manual(values = c("Embryonic-like" = colors_metaprograms[['Embryonic-like']], "Neuroepithelial-like" = colors_metaprograms[["Neuroepithelial-like"]])) +  # Define colors
+      ylab(NULL) + theme_classic() + 
+      geom_vline(xintercept = 0, color = "black") +
+      theme(
+        plot.title = element_text(hjust=0.5, face="bold"),
+        axis.text.x = element_text(size = 12, color = "black"),   # Adjust x-axis label properties
+        axis.text.y = element_text(size = 12, color = "black"),    # Adjust y-axis label properties
+        legend.text = element_text(size = 12, color = "black"),
+        legend.title = element_text(size = 12, color = "black")
+      )
+   ggsave(file.path(plot_dir, "8_GSEA.pdf"), width=12, height=6)
+
+
+
+```
+
+
+

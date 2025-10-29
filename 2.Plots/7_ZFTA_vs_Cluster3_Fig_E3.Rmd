@@ -1,0 +1,505 @@
+---
+title: "Identification of transcriptional programs differentially regulated between canonical ZFTA-Cluster and ZFTA-Cluster 3 tumors"
+author: "Sara Danielli"
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+---
+
+```{r, setup, include = FALSE}
+library(knitr)
+opts_chunk$set(
+  echo = TRUE, cache = TRUE, warning = FALSE, comment = FALSE)
+```
+
+```{r preparation environment, message=FALSE, warning=FALSE, results='hide'}
+# Load packages -----------------------------------
+library(tidyverse)
+library(ggpubr)
+library(dplyr)
+library(Seurat)
+library(ggplot2)
+library(edgeR)
+library(readxl)
+library(writexl)
+library(qs)
+library(cowplot)
+library(openxlsx)
+library(patchwork)
+library(SingleR)
+library(celldex)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(msigdbr)
+library(SingleCellExperiment)
+library(circlize)
+library(ComplexHeatmap)
+
+# Organize environment  -----------------------------------
+base_dir <- "/Users/sdaniell/Partners HealthCare Dropbox/Sara Danielli/Filbin lab - sample location/Filbin Lab Active/Sara/Project/Ependymoma/11 - Plots scRNAseq"
+
+data_dir <- file.path(base_dir, "data")
+analysis_dir <- file.path(base_dir, 'analysis')
+plot_dir <- file.path(analysis_dir, "plots/STEPN/malignant/ZFTARELA_vs_ZFTACluster3")
+if (!dir.exists(plot_dir)){dir.create(plot_dir, recursive = T)}
+
+
+resource_dir <- file.path(base_dir, "scripts/resources")
+source(file.path(resource_dir, "Plot_style_v2.R"))
+#source(file.path(resource_dir, "NMF_helper_function.R")) 
+source(file.path(resource_dir, 'single_cell_preprocessing_helper_functions_CBJr.R'))
+
+
+# Define color palettes  -----------------------------------
+# col_subtype = c('ZFTA-RELA' = "#B44672",'ZFTA-Cluster 1' = "#B47846", 'ZFTA-Cluster 2' = "#46B478",
+#                 'ZFTA-Cluster 3' = "#46B4AF", 'ZFTA-Cluster 4' = "#4682B4",'ST-YAP1' = "#B4AF46")
+# 
+# colors_metaprograms<- c("gray30","#F99E93FF","#9E5E9BFF","#74ADD1FF",'#0F4F8B', "#ACD39EFF","#96410EFF", 'mistyrose1')
+# 
+# names(colors_metaprograms) <- c("Cycling", "Neuroepithelial-like", "Radial-glia-like", 
+#                           "Embryonic-neuronal-like", "Neuronal-like" ,"Ependymal-like", "MES-like", "Embryonic-like")
+# 
+
+
+# load in data -----------------------------------
+# load seurat objects
+seurat_obj_mal <- qread(file = file.path(base_dir, "data/patient/seurat_obj_malignant_annotated2.qs"))
+Idents(seurat_obj_mal) <- 'Subtype'
+seurat_obj_mal <- subset(seurat_obj_mal, idents = c('ZFTA-RELA', 'ZFTA-Cluster 3'))
+
+# load metadata
+metadata <- read_xlsx(file.path(base_dir, 'data/metadata/metadata_ST_EPN_Patient.xlsx'))
+metadata <- metadata %>% filter(`sc/snRNAseq` %in% c('scRNA-seq', 'snRNA-seq'))
+
+```
+
+
+
+# Perform analysis on a pseudo-bulked level ------------------------------
+
+
+## Create pseudobulked matrix 
+```{r pseudobulk approach 2, fig.width =6, fig.height = 4, fig.align="center"}
+# transform into matrix
+cm <- as.matrix(seurat_obj_mal[["RNA"]]$counts)
+
+# extract metadata
+metadata_seurat <- seurat_obj_mal@meta.data
+
+# transform as single cell object
+sce <- SingleCellExperiment(list(counts = cm),
+                            colData = metadata_seurat
+)
+
+# first subset the coldata to only have the columns we care about for pseudo-bulking 
+groups <- colData(sce)[, c("sample", "Subtype")]
+
+# create a new SCE object that contains 
+# the pseudo-bulked counts across the provided groups 
+sce <- scuttle::aggregateAcrossCells(sce, 
+                                     id = groups)
+
+# column names aren't automatically added to the pseudo-bulked sce, 
+# so let's add them in 
+colnames(sce) <- sce$sample
+
+
+```
+
+## Create DeSEQ2 object for PC plot
+```{r DEseq2, fig.width =6, fig.height = 4, fig.align="center"}
+# Perform differential expression with DESeq2
+
+deseq_object <- DESeq2::DESeqDataSet(sce,
+                                     design = ~ Subtype)
+
+# estimate size factors first
+deseq_object <- DESeq2::estimateSizeFactors(deseq_object)
+
+# normalize and log transform to use for visualization
+normalized_object <- DESeq2::vst(deseq_object, 
+                                 blind = TRUE)
+
+```
+
+## PC plot colored by subtype
+```{r PC plot pseudo , fig.width =6, fig.height = 4, fig.align="center"}
+# PC plot ----------------------------------------------------------
+pcaData <- plotPCA(normalized_object, intgroup=c("sample", "Subtype"), 
+                   ntop = 3000,
+                   returnData=TRUE)
+
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+
+ggplot(pcaData, aes(PC1, PC2, color=Subtype)) +
+  geom_point(size=3) +
+  xlab(paste0("PC1: ",percentVar[1],"% variance")) +
+  ylab(paste0("PC2: ",percentVar[2],"% variance")) + 
+  scale_color_manual(values = col_subtype)+
+  theme(plot.title = element_text(hjust=0.5, face="bold"),
+        panel.background = element_blank(),
+        panel.border = element_rect(colour = "black", fill=NA, size=1),  # Add square border
+        axis.text.x = element_text(size=12, angle = 45, vjust = 1, hjust=1, colour="black"),
+        axis.text.y = element_text(size=12, colour="black"),
+        axis.title=element_text(size=12),
+        strip.text = element_text(size = 13, face = "bold")) +
+  guides(color = guide_legend(ncol = 1))
+ggsave(file.path(plot_dir, "9_pseudobulk_PCA_3000hvgs.pdf"), width=6, height=4)
+
+```
+
+
+## Identify differentially expressed genes using edgeR
+```{r edgeR  , fig.width =6, fig.height = 4, fig.align="center"}
+
+# transform single-cell into matrix
+cm <- as.matrix(seurat_obj_mal[["RNA"]]$counts)
+
+# extract metadata
+metadata_seurat <- seurat_obj_mal@meta.data
+
+# transform as single cell object
+sce <- SingleCellExperiment(list(counts = cm),
+                            colData = metadata_seurat
+)
+
+# first subset the coldata to only have the columns we care about for pseudo-bulking 
+groups <- colData(sce)[, c("sample")]
+
+# create a new SCE object that contains 
+# the pseudo-bulked counts across the provided groups 
+sce <- scuttle::aggregateAcrossCells(sce, 
+                                     id = groups)
+
+countdata <- data.frame(counts(sce))
+colnames(countdata) <- colnames(counts(sce))
+
+# create group for DEG analysis
+index <- match(colnames(countdata), metadata$FileName )
+mygroups <- factor(metadata$Subtype[index])
+
+y <- DGEList(counts=countdata, genes=rownames(countdata), group = mygroups)
+
+
+# filter out genes lowly expressed
+keep <- filterByExpr(y, group=mygroups)
+y <- y[keep, , keep.lib.sizes=FALSE]
+
+# normalization
+
+y <- calcNormFactors(y)
+design <- model.matrix(~ mygroups)
+rownames(design) <- colnames(y)
+
+# estimation of the negative binomial dispersions
+y <- estimateDisp(y, design)
+#  fitting of the negative binomial model to the count data
+fit <- glmFit(y, design)
+# hypothesis testing
+qlf <- glmLRT(fit)
+
+topTags(qlf)
+
+
+# print results
+summary(decideTests(qlf))
+result_edgeR <- as.data.frame(topTags(qlf, n = nrow(countdata)))
+write.csv(result_edgeR, file.path(plot_dir, '10_pseudobulk_results_ZFTARELA_vs_ZFTACluster3_edgeR.csv'))
+
+# how many genes are stat sig?
+table(result_edgeR$FDR < 1e-03)
+
+# export genes that are stat sig
+result_edgeR_sig <- result_edgeR %>% 
+  filter(FDR < 1e-03) %>%
+  arrange(-logFC)
+write.csv(result_edgeR, file.path(plot_dir, '11_pseudobulk_results_ZFTARELA_vs_ZFTACluster3_edgeR_FDR_1e03.csv'))
+
+    
+    
+```
+
+
+
+### Plot volcano plot of DEGs
+
+```{r volcano plot pseudobulk, fig.width =6, fig.height = 4, fig.align="center"}
+# Plot volcano plot of DEGs colored by significance
+   # create new column that contains the information about whether a gene is above FC and below P signif.
+   result_edgeR <- result_edgeR %>%
+     mutate(
+       color = case_when(
+         logFC > 1 & FDR < 1e-03 ~ 'ZFTA-RELA',
+         logFC < -1 & FDR < 1e-03 ~ 'ZFTA-Cluster 3'
+       )
+     )
+   
+ col_volcano <- c( 'grey90', col_subtype[['ZFTA-Cluster 3']], col_subtype[["ZFTA-RELA"]])
+ names(col_volcano) <- c('NA', 'ZFTA-Cluster 3', "ZFTA-RELA")
+ 
+ ggplot(result_edgeR, aes(logFC, -log(FDR,10))) +
+   geom_point(aes(color = ifelse(is.na(color), "NA", color))) +
+   xlab(expression("Log"[2]*" fold change")) + 
+   ylab(expression("-log"[10]*"P")) +
+   geom_text_repel(data = subset(result_edgeR, !is.na(color)), 
+                   aes(label = genes), box.padding = 0.2,
+                   point.padding = 0.2, segment.alpha = 1, size = 3) +
+   xlab(expression("Log"[2]*"fold change")) + 
+   scale_color_manual(values = col_volcano) +  
+   geom_vline(xintercept = -1, linetype="dotted") + 
+   geom_vline(xintercept = 1, linetype="dotted") + 
+   geom_hline(yintercept = -log(1e-03,10), linetype="dotted") + 
+   theme_cellstate_plot +
+  # xlim(c(-6, 6)) +
+   labs(color = 'Upregulated in')
+ggsave(file.path(plot_dir, "12_pseudobulk_Volcano_plot.pdf"), width=6, height=4)
+    
+```
+
+### Plot heatmap of DEGs
+
+```{r heatmap plot , fig.width =8, fig.height = 5, fig.align="center"}
+# Make a heatmap of genes DEGs  ------------------------------------------------
+    # Generate a color palette with 50 colors using RdBu
+    color_palette <- colorRampPalette(rev(brewer.pal(n = 10, name = "RdBu")))(50)
+    
+    # Define the range for numeric breaks
+    range_min <- -4
+    range_max <- 4
+    
+    # Generate 50 evenly spaced numeric breaks
+    breaks <- seq(range_min, range_max, length.out = 50)
+    
+    # Create the color function mapping 50 breaks to 50 colors
+    col_fun <- colorRamp2(breaks, color_palette)
+    
+    
+    # subset expression matrix to genes DEGs
+    genes_to_keep <- result_edgeR %>%
+      filter(FDR < 1e-03)
+    genes_to_keep2 <- genes_to_keep$gene
+    
+    matrix_expr2 <- sce[rownames(sce) %in% genes_to_keep2, ]
+    matrix_expr2 <- counts(matrix_expr2)
+    
+    # scale
+    matrix_expr2 <- scale_rows(matrix_expr2)
+    dim(matrix_expr2)
+    
+    df <- as.data.frame(metadata[, c('FileName', 'Sampling', 'Subtype')])
+    df
+    rownames(df) <- df$FileName
+    df$FileName <- NULL
+    
+    df <- df[colnames(as.matrix(matrix_expr2)), ]
+    
+    
+    column_ha = HeatmapAnnotation(df = df,
+                                  col = list(Subtype = col_subtype,
+                                             Sampling = col_sampling)
+                                  # border of squares
+                                  # gp = gpar(col = "black")
+    )
+    
+    # row annotation
+    df_row = as.data.frame(genes_to_keep)
+    df_row$label <- ifelse(df_row$logFC > 0, 'up-', 'down-')
+    rownames(df_row) <- df_row$genes
+    
+    
+     df_row =df_row[, c('genes', 'label')]
+    df_row <- df_row[rownames(as.matrix(matrix_expr2)), ]
+    
+    
+    color_genes <- c("#900512", "#000A87")
+    names(color_genes) <- c('up-', 'down-')
+    row_ha = rowAnnotation(df = df_row,
+                           col = list(label = color_genes),
+                           show_annotation_name = FALSE,
+                           show_legend = FALSE )
+    
+    # print out nr of DEGs
+    DEG <- table(df_row$label)
+    #write.csv(DEG, file.path(plot_dir_base, "4_Number_DEG.csv"))
+    
+    ht <- Heatmap(as.matrix(matrix_expr2),
+                  cluster_rows = T,
+                  cluster_columns = T,
+                  col = col_fun,
+                  show_row_names = F,
+                  use_raster = F,
+                  #col = colorRampPalette(rev(brewer.pal(n = 10, name = "RdBu")))(50),
+                  column_split =  factor(df$Subtype, levels = c( 'ZFTA-Cluster 3', 'ZFTA-RELA')),
+                  row_split =  factor(c(df_row$label), levels = c('down-', 'up-')),
+                  top_annotation = column_ha,
+                  left_annotation = row_ha
+    )
+   Cairo::CairoPDF(file.path(plot_dir, '13_pseudobulk_heatmap.pdf'), width=8, height=5)
+   print(ht)
+   dev.off()
+    ht
+    
+```
+
+
+
+## Perform GO analysis
+
+```{r GO pseudobulk plot , fig.width =6, fig.height = 4, fig.align="center"}
+## GO of markers upregulated in embryonic -----------------
+
+markers_Cl3 <- result_edgeR |>
+      dplyr::filter(logFC < -1) |>
+      dplyr::filter(FDR < 1e-03) |>
+      # Take the "top 500" when ordering by FC
+      dplyr::slice_min(order_by = -logFC, n = 500) |>
+      # Extract a vector of the gene symbols
+      dplyr::pull(genes)
+
+    
+go_ora_results_Cl3 <- enrichGO(gene = markers_Cl3, 
+                           ont = "ALL", 
+                           keyType = "SYMBOL", 
+                           universe = result_edgeR$genes,
+                           minGSSize = 3, 
+                           maxGSSize = 800,
+                           pvalueCutoff = 0.05, 
+                           OrgDb = org.Hs.eg.db, 
+                           pAdjustMethod = "BH")
+    
+  if (!is.null(go_ora_results_Cl3)) {
+    go_result_df <- data.frame(go_ora_results_Cl3@result)
+    write.csv(go_result_df, file.path(plot_dir, "14_pseudobulk_enrichGO_cluster3_vs_ZFTA.csv"))
+  } else {
+    paste('No significant enrichment found in upregulated genes')
+  }
+    
+
+
+
+## GO of markers upregulated in neuroepithelial -----------------
+  markers_ZR <- result_edgeR |>
+      dplyr::filter(logFC > 1) |>
+      dplyr::filter(FDR < 1e-03) |>
+      # Take the "top 500" when ordering by FC
+      dplyr::slice_min(order_by = logFC, n = 500) |>
+      # Extract a vector of the gene symbols
+      dplyr::pull(genes)
+
+
+    
+go_ora_results_ZR <- enrichGO(gene = markers_ZR, 
+                           ont = "ALL", 
+                           keyType = "SYMBOL", 
+                           universe = result_edgeR$genes,
+                           minGSSize = 3, 
+                           maxGSSize = 800,
+                           pvalueCutoff = 0.05, 
+                           OrgDb = org.Hs.eg.db, 
+                           pAdjustMethod = "BH")
+    
+  if (!is.null(go_ora_results_ZR)) {
+    go_result_df <- data.frame(go_ora_results_ZR@result)
+    write.csv(go_result_df, file.path(plot_dir, "15_pseudobulk_enrichGO_ZFTA_vs_cluster3.csv"))
+  } else {
+    paste('No significant enrichment found in upregulated genes')
+  }
+    
+
+
+# GO of both upregulated in embryonic and neuroepithelial -----------------------------
+    # Check if at least one result object is not NULL
+    if (!is.null(go_ora_results_Cl3) || !is.null(go_ora_results_ZR)) {
+      
+      # Initialize a list to store non-empty results
+      mlist <- list()
+      
+      if (!is.null(go_ora_results_Cl3)) {
+        mlist[["ZFTA-Cluster 3"]] <- go_ora_results_Cl3
+      }
+      
+      if (!is.null(go_ora_results_ZR)) {
+        mlist[["ZFTA-RELA"]] <- go_ora_results_ZR      }
+      
+      # Proceed with merging and plotting if the list is not empty
+      if (length(mlist) > 0) {
+        mresult <- merge_result(mlist)
+        dotplot_GO <- dotplot(mresult, showCategory = 10) +
+          theme(plot.title = element_text(hjust=0.5, face="bold")) #+ theme_PCplot
+      ggsave(file.path(plot_dir, "16_pseudobulk_enrichGO_top10.pdf"), width=6, height=8)
+
+      }
+    }
+
+```
+
+## Perform GSEA analysis  
+```{r GSEApseudo, fig.width =12, fig.height = 6, fig.align="center"}
+
+ # Gene set enrichment analysis --------------------------------------
+    hs_cell_type_df <- msigdbr(species = "Homo sapiens",
+                               category = "C5")
+    
+    input_file <-  result_edgeR |>
+  # Significant p values
+  dplyr::filter(FDR < 1e-03)
+    
+    output_file <- file.path(plot_dir,
+                             "17_pseudobulk_GSEA_cluster3_vs_ZFTA.tsv")
+
+    
+    sum(duplicated(input_file$genes))
+    
+    lfc_vector <- input_file |>
+      # Extract a vector of `summary.logFC` named by `gene_symbol`
+      dplyr::pull(logFC, name = genes)
+    
+    lfc_vector <- sort(lfc_vector, decreasing = TRUE)
+    
+    gse <- gseGO(geneList = lfc_vector, 
+                 ont = "ALL", 
+                 keyType = "SYMBOL", 
+                 #nPerm = 10000, 
+                 minGSSize = 3, 
+                 maxGSSize = 800, 
+                 pvalueCutoff = 0.05, 
+                 verbose = TRUE, 
+                 OrgDb = org.Hs.eg.db, 
+                 pAdjustMethod = "BH"
+    )
+    
+    
+    # write results
+    gse@result |> readr::write_tsv(output_file)
+    
+    
+    # Dynamically get the top and bottom terms by NES
+    top_bottom_terms <- gse@result %>%
+      dplyr::arrange(desc(NES)) %>%
+      dplyr::mutate(row_num = row_number()) %>%
+      dplyr::filter(
+        row_num <= min(10, n()) | row_num > max(n() - 10, 0)
+      ) %>%
+      dplyr::mutate(color_group = ifelse(NES > 0, "ZFTA-RELA", "ZFTA-Cluster 3")) %>%
+      dplyr::select(-row_num)
+    
+    
+    ## Plot barplot with sign of FC
+    ggplot(top_bottom_terms, aes(NES, fct_reorder(Description, NES), fill=color_group), showCategory=20) + 
+      geom_col(orientation='y') + 
+      scale_fill_manual(values = c("ZFTA-Cluster 3" = col_subtype[['ZFTA-Cluster 3']], "ZFTA-RELA" = col_subtype[["ZFTA-RELA"]])) +  # Define colors
+      ylab(NULL) + theme_classic() + 
+      geom_vline(xintercept = 0, color = "black") +
+      theme(
+        plot.title = element_text(hjust=0.5, face="bold"),
+        axis.text.x = element_text(size = 12, color = "black"),   # Adjust x-axis label properties
+        axis.text.y = element_text(size = 12, color = "black"),    # Adjust y-axis label properties
+        legend.text = element_text(size = 12, color = "black"),
+        legend.title = element_text(size = 12, color = "black")
+      )
+   ggsave(file.path(plot_dir, "18_pseudobulk_GSEA.pdf"), width=12, height=6)
+
+
+
+```
