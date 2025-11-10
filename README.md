@@ -28,7 +28,7 @@ Final datasets are cleaned up, annotated and reprocessed using `9_Cleanup_datase
 Code to display oncoprint of Fig 1 is also in this folder (`Oncoprint.R`)
 
 ## 2. Plots
-Codes to plot most figures for ST-EPN patient samples
+Codes to plot most figures for ST-EPN patient samples.
 
 ## 3. Pseudobulk analysis 
 Codes to plot Extended Data Fig 3 and developmental projections of Fig 1f and Extended Data Fig 2a-b. To prepare the reference datasets, the codes stored in the folder `Developmental_dataset_processing` are used.
@@ -44,7 +44,6 @@ Code to perform the spatial data analysis. It contains following scripts:
 
 It also contains following folders:
 - `resources`: contains metadata, and helper functions to process the data and generate results.
-- `figures`: contains code to generate the figures involving spatial analysis in the manuscript.
 - `cellcharter`: contains scripts to run the CellCharter analysis and plot results.
 
 ## 5. Co-culture

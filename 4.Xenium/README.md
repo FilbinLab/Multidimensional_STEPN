@@ -46,10 +46,7 @@ Script `3_NicheAnalysis.R` performs spatial niche analysis.
 ### 4. Coherence analysis
 Script `4_coherence.R` performs the coherence analysis and saves the results.
 
-### 5. Figures
-Scripts to plot final results can be found in the `figures` folder.
-
-### 6. CellCharter analysis 
+### 5. CellCharter analysis 
 All scripts to run the CellCharter analysis and plot results can be found in the `cellcharter` folder. 
 
 CellCharter analysis is performed in three steps using python.
