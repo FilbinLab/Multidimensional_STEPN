@@ -2,7 +2,7 @@
 
 Code repository for single-cell multidimensional profiling of supratentorial ependymomas, preprint: https://www.biorxiv.org/content/10.1101/2024.08.07.607066v1
 
-Processed data for sc/nRNAseq and 10X Xenium are deposited on gene expression omnibus (GEO): 
+Processed data for sc/nRNAseq and 10X Xenium are deposited on gene expression omnibus (GEO). 
 scRNA-seq: GSE300150
 Spatial: GSE300146
 
