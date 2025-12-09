@@ -127,11 +127,38 @@ df_plot = df_clust_sample_comp[names(se_cluster_comp), names(se_sample_comp)]
 df_plot = apply(df_plot, 2, function(x) return(ifelse(x >= 0.3, 0.3, x)))
 ```
 
+## Split
+```{r}
+# Using median entropy as cutoff
+#split_vec = ifelse(se_cluster_comp <= median(se_cluster_comp), "below", "above")
+#split_vec = factor(split_vec, levels = c("below", "above"))
+
+# Using # of samples with >20% SC proportion
+df = df_cc %>% 
+  group_by(SampleID, spatial_cluster) %>%
+  summarise(n1 = n()) %>%
+  group_by(SampleID) %>%
+  mutate(n2 = sum(n1),
+         prop = n1/n2) %>%
+  group_by(spatial_cluster) %>%
+  summarise(n = sum(prop >= 0.05)) %>%
+  arrange(n) %>%
+  as.data.frame()
+
+rownames(df) = as.character(df$spatial_cluster)
+df$entropy = se_cluster_comp[rownames(df)]
+df = df %>% arrange(n, entropy)
+
+sample_restricted = df %>% filter(n <= 2) %>% pull(spatial_cluster)
+split_vec = ifelse(rownames(df) %in% sample_restricted, "Sample-restricted", "Sample-shared")
+split_vec = factor(split_vec, levels = c("Sample-restricted", "Sample-shared"))
+```
+
 ## Row side bars
 ```{r}
 # Data frame for row side bars
 df_plot_row = data.frame(
-  "entropy" = se_cluster_comp
+  "entropy" = df$entropy
 )
 
 # Row side bars
@@ -183,10 +210,9 @@ column_ha = HeatmapAnnotation(
 # )
 ```
 
-## Split
+## Reorder rows
 ```{r}
-split_vec = ifelse(se_cluster_comp <= median(se_cluster_comp), "below", "above")
-split_vec = factor(split_vec, levels = c("below", "above"))
+df_plot = df_plot[rownames(df), ]
 ```
 
 ## Make heatmap 

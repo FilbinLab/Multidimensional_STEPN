@@ -156,3 +156,76 @@ for (i in to_plot){
 cowplot::plot_grid(plotlist = plot_list, ncol = 2)
 ggsave("metaniche_spatial_cluster_cor.pdf", path = fig_dir, width = 6, height = 9)
 ```
+
+## Pairwise correlation with outliers highlighted (Figure-E6F)
+```{r}
+table(colnames(metaniche_comp) == colnames(sc_comp))
+to_plot = list(c("1", "Endothelial"), c("2", "MES-like"), c("3", "Neuroepithelial-like"), c("4", "Neuronal-like"), c("6", "Myeloid"))
+
+plot_list = list()
+for (i in to_plot){
+  df = cbind.data.frame(metaniche_comp[i[1], ], sc_comp[i[2], ])
+  colnames(df) = c("MetaNiche", "SpatialCluster")
+  df$MP = rownames(df)
+  df$highlight = ifelse(df$MP == i[2], "yes", "no")
+  df$label = ifelse(df$MP == i[2], i[2], "")
+  p = ggpubr::ggscatter(
+    data = df,
+    x = "MetaNiche",
+    y = "SpatialCluster",
+    color = "MP",
+    size = "highlight",
+    label = "label",
+    repel = TRUE,
+    font.label = c("16", "plain"),
+    add = "reg.line", 
+    add.params = list(color = "blue", fill = "lightgray"), 
+    conf.int = FALSE, 
+    cor.coef = TRUE, 
+    cor.coeff.args = list(method = "pearson", label.x = 0, label.sep = "\n", size = 5)
+  )
+  p = p + labs(x = paste0("Meta-niche (", i[1], ")"), 
+               y = paste0("Spatial Cluster (", i[2], ")"))
+  p = p + scale_color_manual(values = colors_metaprograms_Xenium)
+  p = p + scale_size_manual(values = c("yes" = 6, "no" = 3))
+  p = p + theme(plot.title = element_text(size = 14, hjust = 1),
+                axis.title = element_text(size = 12),
+                axis.text = element_text(size = 12),
+                legend.position = "None")
+  plot_list[[paste0(i[1], "_", i[2])]] = p
+}
+cowplot::plot_grid(plotlist = plot_list, ncol = 2)
+ggsave("metaniche_spatial_cluster_cor_labeled.pdf", path = fig_dir, width = 6, height = 9)
+```
+
+## Pairwise correlation after excluding outliers (Figure-E6F-new)
+```{r}
+table(colnames(metaniche_comp) == colnames(sc_comp))
+to_plot = list(c("1", "Endothelial"), c("2", "MES-like"), c("3", "Neuroepithelial-like"), c("4", "Neuronal-like"), c("6", "Myeloid"))
+
+plot_list = list()
+for (i in to_plot){
+  df = cbind.data.frame(metaniche_comp[i[1], ], sc_comp[i[2], ])
+  colnames(df) = c("MetaNiche", "SpatialCluster")
+  #to_keep = apply(df, 1, function(x) x[1] < 0.2 & x[2] < 0.2)
+  p = ggpubr::ggscatter(
+    data = df,
+    x = "MetaNiche",
+    y = "SpatialCluster",
+    add = "reg.line", 
+    add.params = list(color = "blue", fill = "lightgray"), 
+    conf.int = TRUE, 
+    cor.coef = TRUE, 
+    cor.coeff.args = list(method = "pearson", label.x = 0, label.sep = "\n", size = 5)
+  )
+  p = p + xlim(0, 0.2) + ylim(0, 0.2)
+  p = p + labs(x = paste0("Meta-niche (", i[1], ")"), 
+               y = paste0("Spatial Cluster (", i[2], ")"))
+  p = p + theme(plot.title = element_text(size = 14, hjust = 1),
+                axis.title = element_text(size = 12),
+                axis.text = element_text(size = 12))
+  plot_list[[paste0(i[1], "_", i[2])]] = p
+}
+cowplot::plot_grid(plotlist = plot_list, ncol = 2)
+ggsave("metaniche_spatial_cluster_cor_wo_outliers.pdf", path = fig_dir, width = 6, height = 9)
+```
