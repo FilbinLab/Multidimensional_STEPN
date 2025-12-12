@@ -18,6 +18,7 @@ Contact: djeong3 at mgh.harvard.edu, sara.g.danielli at gmail.com, carlosa_biagi
 4. Xenium (preprocessing, spatial coherence, niche, neighborhood enrichment, cellchat)
 5. Co-culture (preprocessing, analysis, plots)
 6. Preclinical_models (preprocessing, analysis, plots)
+7. ShinyApp
 
 ## 0. Software version requirements 
 
@@ -57,3 +58,7 @@ Codes to pre-process and analyze patient models cocultured with rat E19 cortical
 ## 6. Preclinical_models
 
 Codes to pre-process patient models 
+
+## 7. ShinyApp
+
+The “ShinyApp” under the ```epnApp``` folder contains all sc/sn-RNA-seq data, providing an accessible platform for data exploration. Installation and execution instructions are conveniently located within the folder.
