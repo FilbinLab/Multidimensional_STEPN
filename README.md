@@ -61,4 +61,4 @@ Codes to pre-process patient models
 
 ## 7. ShinyApp
 
-ShinyApp under the ```epnApp``` folder contains all sc/sn-RNA-seq data, providing an accessible platform for data exploration. Installation and execution instructions are conveniently located within the folder.
+ShinyApp under the ```epnApp``` folder contains all sc/sn-RNA-seq data, providing an accessible platform for data exploration including findings from the manuscript. Installation and execution instructions are conveniently located within the folder.
