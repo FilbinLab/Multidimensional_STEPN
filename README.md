@@ -6,7 +6,7 @@ Processed data for sc/nRNAseq and 10X Xenium are deposited on gene expression om
 scRNA-seq: GSE300150
 Spatial: GSE300146
 
-Raw data depository is pending. 
+Raw sc/snRNAseq data are deposited in EGA (EGAS50000001513). 
 
 Contact: djeong3 at mgh.harvard.edu, sara.g.danielli at gmail.com, carlosa_biagijunior at dfci.harvard.edu
 
